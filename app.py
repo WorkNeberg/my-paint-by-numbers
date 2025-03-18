@@ -5,9 +5,9 @@ import json
 import logging
 from flask import Flask, render_template, request, jsonify, send_from_directory, redirect, url_for, session
 from werkzeug.utils import secure_filename
-from paint_by_numbers import PaintByNumbersGenerator
-from pdf_generator import PBNPdfGenerator
-from integration import enhance_paint_by_numbers_generator
+from core.paint_by_numbers import PaintByNumbersGenerator
+from utils.pdf_generator import PBNPdfGenerator
+from enhanced.integration import enhance_paint_by_numbers_generator
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, 
@@ -140,76 +140,45 @@ def convert():
     processing_mode = request.form.get('processing_mode', 'auto')
     logger.info(f"Processing mode: {processing_mode}")
 
-    # Determine parameters based on mode
-    parameters = {
-        'template_style': request.form.get('template_style', 'classic')
-    }
+    # Default values for the process_with_enhancements function
+    preset_style = None  # Will be determined based on the selected template style
+    complexity_level = 'medium'  # Default complexity
+    auto_detect_type = True  # Default to auto detect
     
+    # Determine the preset style and auto-detect setting based on processing mode
     if processing_mode == 'auto':
         # Auto-detect mode - minimal parameters
-        parameters['auto_detect'] = True
+        auto_detect_type = True
         
     elif processing_mode == 'preset':
         # Preset mode - use a predefined preset
         preset_name = request.form.get('preset', 'portrait')
-        parameters['auto_detect'] = False
+        auto_detect_type = False
         
-        # Add preset-specific parameters
+        # Set the preset style based on the preset name
         if preset_name == 'portrait':
-            parameters.update({
-                'num_colors': 12,
-                'simplification_level': 'low',
-                'edge_strength': 0.8,
-                'edge_width': 1,
-                'enhance_dark_areas': True,
-                'dark_threshold': 50,
-                'edge_style': 'soft',
-                'image_type': 'portrait',
-                'merge_regions_level': 'normal'
-            })
+            preset_style = 'portrait'
+            complexity_level = 'low'
         elif preset_name == 'pet':
-            parameters.update({
-                'num_colors': 10,
-                'simplification_level': 'medium',
-                'edge_strength': 0.7,
-                'edge_width': 1,
-                'enhance_dark_areas': True,
-                'dark_threshold': 60,
-                'edge_style': 'soft',
-                'image_type': 'pet',
-                'merge_regions_level': 'aggressive'
-            })
+            preset_style = 'pet'
+            complexity_level = 'medium'
         elif preset_name == 'landscape':
-            parameters.update({
-                'num_colors': 18,
-                'simplification_level': 'medium',
-                'edge_strength': 1.0,
-                'edge_width': 2,
-                'enhance_dark_areas': False,
-                'edge_style': 'normal',
-                'image_type': 'landscape',
-                'merge_regions_level': 'low'
-            })
+            preset_style = 'landscape'
+            complexity_level = 'medium'
         elif preset_name == 'cartoon':
-            parameters.update({
-                'num_colors': 8,
-                'simplification_level': 'high',
-                'edge_strength': 1.2,
-                'edge_width': 2,
-                'enhance_dark_areas': False,
-                'edge_style': 'normal',
-                'image_type': 'cartoon',
-                'merge_regions_level': 'normal'
-            })
+            preset_style = 'cartoon'
+            complexity_level = 'high'
+            
     elif processing_mode == 'custom':
         # Custom mode - use user-specified parameters
-        parameters.update({
-            'auto_detect': False,
-            'num_colors': int(request.form.get('num_colors', 15)),
-            'simplification_level': request.form.get('simplification_level', 'medium'),
-            'enhance_dark_areas': 'enhance_dark' in request.form
-        })
-        
+        auto_detect_type = False
+        complexity_level = request.form.get('simplification_level', 'medium')
+    
+    # Get the template style if specified
+    template_style = request.form.get('template_style', 'classic')
+    if not preset_style:
+        preset_style = template_style  # Use template_style as preset_style if no preset is selected
+    
     # Add common parameters
     page_size = request.form.get('page_size', 'a4')
     include_unnumbered = 'include_unnumbered' in request.form
@@ -239,10 +208,14 @@ def convert():
             
         # Process the image with smart analysis and optimal parameters
         logger.info("Starting image processing with smart analysis...")
+        
+        # Call the function with ONLY the parameters it accepts
         result = enhanced_generator.process_with_enhancements(
-            upload_path, 
+            upload_path,
+            preset_style=preset_style, 
+            complexity_level=complexity_level,
             output_dir=OUTPUT_FOLDER,
-            **parameters
+            auto_detect_type=auto_detect_type
         )
         
         # Generate PDF
@@ -357,10 +330,43 @@ def api_process_image():
         
         # Process the image
         logger.info(f"API processing with parameters: {parameters}")
+        processing_params = {}
+        if 'template_style' in parameters:
+            processing_params['preset_style'] = parameters.get('template_style')
+        if 'auto_detect' in parameters:
+            processing_params['auto_detect_type'] = parameters.get('auto_detect')
+            
+        # Add other parameters that might exist
+        for key in ['num_colors', 'simplification_level', 'edge_strength', 
+                    'edge_width', 'enhance_dark_areas', 'dark_threshold',
+                    'edge_style', 'merge_regions_level', 'image_type']:
+            if key in parameters:
+                processing_params[key] = parameters[key]
+
+        # Call with adjusted parameters
+        preset_style = None
+        complexity_level = 'medium'
+        auto_detect_type = True
+
+        # Map template_style to preset_style
+        if 'template_style' in parameters:
+            preset_style = parameters.get('template_style')
+
+        # Map auto_detect to auto_detect_type
+        if 'auto_detect' in parameters:
+            auto_detect_type = parameters.get('auto_detect')
+
+        # Map simplification_level to complexity_level
+        if 'simplification_level' in parameters:
+            complexity_level = parameters.get('simplification_level')
+
+        # Call the function with only the parameters it accepts
         result = enhanced_generator.process_with_enhancements(
-            upload_path, 
+            upload_path,
+            preset_style=preset_style,
+            complexity_level=complexity_level,
             output_dir=OUTPUT_FOLDER,
-            **parameters
+            auto_detect_type=auto_detect_type
         )
         
         # Generate PDF

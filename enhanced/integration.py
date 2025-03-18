@@ -1,9 +1,9 @@
 # This file shows how to integrate the enhanced processing into your existing system
-
-from paint_by_numbers import PaintByNumbersGenerator
-from enhanced_processor import EnhancedProcessor
-from image_type_detector import ImageTypeDetector
-from settings_manager import SettingsManager
+import numpy as np 
+from core.paint_by_numbers import PaintByNumbersGenerator
+from enhanced.enhanced_processor import EnhancedProcessor
+from enhanced.image_type_detector import ImageTypeDetector
+from enhanced.settings_manager import SettingsManager
 import os
 import cv2
 from reportlab.pdfgen import canvas
@@ -21,7 +21,7 @@ def enhance_paint_by_numbers_generator(pbn_generator):
     
     # Add new method for advanced processing
     def process_with_enhancements(self, image_path, preset_style=None, complexity_level='medium', 
-                                output_dir='output', auto_detect_type=True):
+                            output_dir='output', auto_detect_type=True, template_style='classic'):
         """
         Process image with advanced enhancements and specialized handling
         

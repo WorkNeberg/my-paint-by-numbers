@@ -1,9 +1,9 @@
 import cv2
 import numpy as np
-from image_processor import ImageProcessor
-from feature_preserver import FeaturePreserver
-from image_type_detector import ImageTypeDetector
-from settings_manager import SettingsManager
+from core.image_processor import ImageProcessor
+from .feature_preserver import FeaturePreserver
+from .image_type_detector import ImageTypeDetector
+from .settings_manager import SettingsManager
 import os
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans

@@ -3,9 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import time
-from image_processor import ImageProcessor
-from number_placement import NumberPlacer
-from image_analyzer import ImageAnalyzer
+from core.image_processor import ImageProcessor
+from core.number_placement import NumberPlacer
+from core.image_analyzer import ImageAnalyzer
 
 class PaintByNumbersGenerator:
     def __init__(self):
