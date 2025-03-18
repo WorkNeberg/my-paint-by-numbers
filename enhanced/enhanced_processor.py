@@ -403,6 +403,7 @@ class EnhancedProcessor:
                             image_enhanced[y:y+h, x:x+w] = eye_enhanced
         
         return image_enhanced
+    
     def _enhance_skin_tones(self, image):
         """
         Enhance skin tones for better visual quality in portraits
@@ -437,9 +438,17 @@ class EnhancedProcessor:
         lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
         l, a, b = cv2.split(lab)
         
+        # Ensure all channels are 8-bit unsigned integers
+        l = l.astype(np.uint8)
+        a = a.astype(np.uint8)
+        b = b.astype(np.uint8)
+        
         # Apply CLAHE to L channel
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         l_enhanced = clahe.apply(l)
+        
+        # Make sure enhanced L channel is uint8
+        l_enhanced = l_enhanced.astype(np.uint8)
         
         # For skin areas, warm up the color slightly (increase a channel)
         a_skin = np.clip(a + 3 * skin_mask, 0, 255).astype(np.uint8)
@@ -483,7 +492,17 @@ class EnhancedProcessor:
         # Enhance contrast using LAB color space
         lab = cv2.cvtColor(filtered, cv2.COLOR_RGB2LAB)
         l, a, b = cv2.split(lab)
+        
+        # Ensure all channels are 8-bit unsigned integers
+        l = l.astype(np.uint8)
+        a = a.astype(np.uint8)
+        b = b.astype(np.uint8)
+        
         l_enhanced = clahe.apply(l)
+        
+        # Make sure enhanced L channel is uint8
+        l_enhanced = l_enhanced.astype(np.uint8)
+        
         lab_enhanced = cv2.merge([l_enhanced, a, b])
         enhanced = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2RGB)
         
@@ -510,9 +529,17 @@ class EnhancedProcessor:
         lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
         l, a, b = cv2.split(lab)
         
+        # Ensure all channels are 8-bit unsigned integers
+        l = l.astype(np.uint8)
+        a = a.astype(np.uint8)
+        b = b.astype(np.uint8)
+        
         # Apply CLAHE to L channel
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         l_enhanced = clahe.apply(l)
+        
+        # Make sure enhanced L channel remains the same type as a and b
+        l_enhanced = l_enhanced.astype(np.uint8)
         
         # Merge channels and convert back
         lab_enhanced = cv2.merge([l_enhanced, a, b])
@@ -522,6 +549,11 @@ class EnhancedProcessor:
         hsv = cv2.cvtColor(enhanced, cv2.COLOR_RGB2HSV)
         h, s, v = cv2.split(hsv)
         
+        # Ensure all HSV channels are 8-bit unsigned integers
+        h = h.astype(np.uint8)
+        s = s.astype(np.uint8)
+        v = v.astype(np.uint8)
+        
         # Increase saturation slightly
         s = np.clip(s * 1.1, 0, 255).astype(np.uint8)
         
@@ -529,7 +561,7 @@ class EnhancedProcessor:
         hsv_enhanced = cv2.merge([h, s, v])
         result = cv2.cvtColor(hsv_enhanced, cv2.COLOR_HSV2RGB)
         
-        return result
+        
     def process_with_mask(self, image, feature_mask, feature_regions, settings):
         """
         Process image with different parameters for feature and non-feature regions

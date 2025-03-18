@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from scipy import ndimage
+from skimage import morphology 
 
 class NumberPlacer:
     def __init__(self):
@@ -86,7 +87,125 @@ class NumberPlacer:
             x_pos = min(max(30, r['center'][0]), w - 30)
             cv2.putText(template, str(r['id']), (x_pos, h - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
             x_offset = x_pos + 20
-    
+
+    def optimize_number_placement(self, label_image, region_data, min_font_size=8, 
+                                max_font_size=15, preserve_features=True, feature_map=None):
+        """
+        Optimized version of number placement with better readability and feature preservation
+        
+        Parameters:
+        - label_image: Image with region labels
+        - region_data: Information about each region
+        - min_font_size: Minimum font size for numbers
+        - max_font_size: Maximum font size for numbers
+        - preserve_features: Whether to avoid placing numbers over important features
+        - feature_map: Optional map of important features to avoid
+        
+        Returns:
+        - Dictionary mapping region labels to number placement coordinates and sizes
+        """
+        print("Optimizing number placement for better readability...")
+        
+        h, w = label_image.shape
+        number_placements = {}
+        
+        # For each region, find the optimal placement for its number
+        for region_label, data in enumerate(region_data):
+            # Skip tiny regions that will be merged or discarded
+            if data['area'] < 100:
+                continue
+                
+            # Create a mask for this region
+            region_mask = (label_image == data['id'])
+            
+            # Calculate appropriate font size based on region size
+            region_size_factor = min(1.0, data['area'] / 10000)  # Cap at 1.0
+            font_size = int(min_font_size + region_size_factor * (max_font_size - min_font_size))
+            
+            # Initialize best placement position and score
+            best_pos = None
+            best_score = float('-inf')
+            
+            # Get region's centroid as starting point
+            centroid_x, centroid_y = data['center']
+            
+            # Generate candidate positions including centroid and distributed alternatives
+            candidate_positions = []
+            
+            # Add centroid
+            candidate_positions.append((centroid_x, centroid_y))
+            
+            # Add positions along the medial axis (skeleton)
+            from skimage import morphology
+            skeleton = morphology.medial_axis(region_mask)
+            skeleton_points = np.where(skeleton)
+            
+            # Sample points along the skeleton
+            if len(skeleton_points[0]) > 0:
+                num_samples = min(10, len(skeleton_points[0]))
+                sample_indices = np.linspace(0, len(skeleton_points[0]) - 1, num_samples).astype(int)
+                for idx in sample_indices:
+                    candidate_positions.append((skeleton_points[1][idx], skeleton_points[0][idx]))
+            
+            # Evaluate each candidate position
+            for pos_x, pos_y in candidate_positions:
+                # Check if position is within the label region
+                pos_y_int, pos_x_int = int(pos_y), int(pos_x)
+                if not (0 <= pos_y_int < h and 0 <= pos_x_int < w) or not region_mask[pos_y_int][pos_x_int]:
+                    continue
+                    
+                # Calculate the space available around this position
+                number_width = font_size * len(str(data['id'])) * 0.6
+                number_height = font_size
+                
+                # Define the region that would be occupied by the number
+                half_width = number_width / 2
+                half_height = number_height / 2
+                
+                num_box_x1 = max(0, int(pos_x - half_width))
+                num_box_y1 = max(0, int(pos_y - half_height))
+                num_box_x2 = min(w - 1, int(pos_x + half_width))
+                num_box_y2 = min(h - 1, int(pos_y + half_height))
+                
+                # Calculate how well the number fits within the region
+                num_box = region_mask[num_box_y1:num_box_y2, num_box_x1:num_box_x2]
+                fit_score = np.sum(num_box) / num_box.size if num_box.size > 0 else 0
+                
+                # Penalize if number would overlay important features
+                feature_penalty = 0
+                if preserve_features and feature_map is not None:
+                    feature_box = feature_map[num_box_y1:num_box_y2, num_box_x1:num_box_x2]
+                    feature_density = np.mean(feature_box) if feature_box.size > 0 else 0
+                    feature_penalty = feature_density * 0.5  # Scale penalty
+                
+                # Calculate distance from centroid (prefer positions closer to center)
+                distance_from_centroid = np.sqrt((pos_x - centroid_x)**2 + (pos_y - centroid_y)**2)
+                distance_penalty = distance_from_centroid / np.sqrt(data['area']) * 0.1
+                
+                # Calculate final score
+                score = fit_score - distance_penalty - feature_penalty
+                
+                # Update best position if this is better
+                if score > best_score:
+                    best_score = score
+                    best_pos = (pos_x, pos_y)
+            
+            # If we found a valid position, add it to the results
+            if best_pos is not None:
+                number_placements[data['id']] = {
+                    'position': best_pos,
+                    'font_size': font_size,
+                    'fit_score': best_score
+                }
+            else:
+                # Fallback to centroid if no better position found
+                number_placements[data['id']] = {
+                    'position': (centroid_x, centroid_y),
+                    'font_size': font_size,
+                    'fit_score': 0.0
+                }
+        
+        return number_placements
     def _place_numbers_detailed(self, template, label_image, region_data):
         """Place numbers inside each region"""
         # For each region
