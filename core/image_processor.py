@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from sklearn.cluster import KMeans
 from scipy import ndimage
+import time
 
 class ImageProcessor:
     def __init__(self):
@@ -404,93 +405,127 @@ class ImageProcessor:
         """
         print(f"Enhancing dark areas with adaptive approach (base threshold: {dark_threshold})")
         
-        # Create a copy to preserve original
-        image_enhanced = image.copy()
+        # Set a maximum computation time limit
+        max_processing_time = 5  # seconds
+        start_time = time.time()
         
-        # Convert to HSV for better dark area detection
-        hsv_img = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-        v_channel = hsv_img[:,:,2]
-        
-        # Analyze histogram to find better threshold adaptively
-        hist = cv2.calcHist([v_channel], [0], None, [256], [0, 256])
-        hist_cumsum = np.cumsum(hist) / np.sum(hist)
-        
-        # Find threshold that covers the darkest 15% of pixels
-        # This is more adaptive than using a fixed threshold
-        for i in range(256):
-            if hist_cumsum[i] > 0.15:
-                adaptive_threshold = max(dark_threshold - 10, i + 5)
-                break
-        else:
-            adaptive_threshold = dark_threshold
-        
-        # Create an adaptive dark mask
-        dark_mask = v_channel < adaptive_threshold
-        
-        # Calculate dark area percentage
-        dark_pixel_percentage = np.sum(dark_mask) / dark_mask.size * 100
-        print(f"Dark area detected: {dark_pixel_percentage:.1f}% (adaptive threshold: {adaptive_threshold})")
-        
-        if np.any(dark_mask):
-            # Create gradient mask for smooth transition
-            gradient_mask = dark_mask.astype(np.float32)
-            gradient_mask = cv2.GaussianBlur(gradient_mask, (15, 15), 0)
+        try:
+            # Create a copy to preserve original
+            image_enhanced = image.copy()
             
-            # Choose CLAHE parameters based on image characteristics
-            if dark_pixel_percentage > 40:  # Very dark image
-                clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(4,4))
+            # Convert to HSV for better dark area detection
+            hsv_img = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+            v_channel = hsv_img[:,:,2]
+            
+            # Analyze histogram to find better threshold adaptively
+            hist = cv2.calcHist([v_channel], [0], None, [256], [0, 256])
+            hist_cumsum = np.cumsum(hist) / np.sum(hist)
+            
+            # Check if we're taking too long already
+            if time.time() - start_time > max_processing_time:
+                print("Dark area enhancement taking too long, using simplest approach")
+                # Just use the original dark threshold
+                dark_mask = v_channel < dark_threshold
+                gradient_mask = dark_mask.astype(np.float32)
+                gradient_mask_3ch = np.stack([gradient_mask] * 3, axis=2)
+                enhanced_rgb = np.minimum(image_enhanced * 1.3, 255).astype(np.uint8)
+                return image_enhanced * (1 - gradient_mask_3ch) + enhanced_rgb * gradient_mask_3ch
+            
+            # Find threshold that covers the darkest 15% of pixels
+            # This is more adaptive than using a fixed threshold
+            for i in range(256):
+                if hist_cumsum[i] > 0.15:
+                    adaptive_threshold = max(dark_threshold - 10, i + 5)
+                    break
             else:
-                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+                adaptive_threshold = dark_threshold
             
-            # Convert to LAB color space (better for enhancement)
-            lab = cv2.cvtColor(image_enhanced, cv2.COLOR_RGB2LAB)
-            l, a, b = cv2.split(lab)
+            # Create an adaptive dark mask
+            dark_mask = v_channel < adaptive_threshold
             
-            # Apply CLAHE to the L channel
-            l_enhanced = clahe.apply(l)
+            # Calculate dark area percentage
+            dark_pixel_percentage = np.sum(dark_mask) / dark_mask.size * 100
+            print(f"Dark area detected: {dark_pixel_percentage:.1f}% (adaptive threshold: {adaptive_threshold})")
             
-            # Merge channels back
-            lab_enhanced = cv2.merge((l_enhanced, a, b))
-            enhanced_rgb = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2RGB)
+            # Check processing time again
+            if time.time() - start_time > max_processing_time:
+                print("Dark area enhancement taking too long, using simplified processing")
+                gradient_mask = dark_mask.astype(np.float32)
+                gradient_mask_3ch = np.stack([gradient_mask] * 3, axis=2)
+                enhanced_rgb = np.minimum(image_enhanced * 1.3, 255).astype(np.uint8)
+                return image_enhanced * (1 - gradient_mask_3ch) + enhanced_rgb * gradient_mask_3ch
             
-            # Prepare for blending
-            gradient_mask_3ch = np.stack([gradient_mask] * 3, axis=2)
-            
-            # Blend enhanced and original using gradient mask for smooth transition
-            image_enhanced = image_enhanced * (1 - gradient_mask_3ch) + enhanced_rgb * gradient_mask_3ch
-            
-            # Additional gamma correction specifically for dark areas
-            if dark_pixel_percentage > 20:
-                # Create adaptive gamma based on darkness
-                gamma = 0.7 if dark_pixel_percentage > 50 else 0.8
-                lookup_table = np.array([((i / 255.0) ** gamma) * 255 for i in range(0, 256)]).astype("uint8")
+            if np.any(dark_mask):
+                # Create gradient mask for smooth transition
+                gradient_mask = dark_mask.astype(np.float32)
+                gradient_mask = cv2.GaussianBlur(gradient_mask, (15, 15), 0)
                 
-                # Apply gamma correction only to dark areas with smooth transition
-                for i in range(3):
-                    # Only apply to darker parts of the image
-                    temp = image_enhanced[:,:,i].copy()
-                    temp = cv2.LUT(temp, lookup_table)
-                    image_enhanced[:,:,i] = image_enhanced[:,:,i] * (1 - gradient_mask_3ch[:,:,i]) + \
-                                            temp * gradient_mask_3ch[:,:,i]
-            
-            # Analyze the image for edge enhancement in dark regions
-            edges = cv2.Canny(image, 50, 150)
-            edges_in_dark = edges * dark_mask.astype(np.uint8)
-            
-            # If we have significant edges in dark regions, enhance them
-            if np.sum(edges_in_dark) > 100:
-                # Create edge mask with dilation for better visibility
-                edge_mask = cv2.dilate(edges_in_dark, np.ones((3,3), np.uint8), iterations=1)
-                edge_mask = edge_mask.astype(np.float32) / 255.0
-                edge_mask_3ch = np.stack([edge_mask] * 3, axis=2)
+                # Check processing time again
+                if time.time() - start_time > max_processing_time:
+                    print("Dark area enhancement taking too long, using simplified processing")
+                    gradient_mask_3ch = np.stack([gradient_mask] * 3, axis=2)
+                    enhanced_rgb = np.minimum(image_enhanced * 1.3, 255).astype(np.uint8)
+                    return image_enhanced * (1 - gradient_mask_3ch) + enhanced_rgb * gradient_mask_3ch
                 
-                # Enhance contrast along edges in dark regions
-                edge_enhanced = cv2.addWeighted(image_enhanced, 1.0, image_enhanced, 0.5, 0)
+                # Choose CLAHE parameters based on image characteristics
+                if dark_pixel_percentage > 40:  # Very dark image
+                    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(4,4))
+                else:
+                    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
                 
-                # Blend in the edge enhancement
-                image_enhanced = image_enhanced * (1 - edge_mask_3ch) + edge_enhanced * edge_mask_3ch
+                # Convert to LAB color space (better for enhancement)
+                lab = cv2.cvtColor(image_enhanced, cv2.COLOR_RGB2LAB)
+                l, a, b = cv2.split(lab)
+                
+                # Check processing time again
+                if time.time() - start_time > max_processing_time:
+                    print("Dark area enhancement taking too long, skipping advanced processing")
+                    return image_enhanced
+                
+                # Apply CLAHE to the L channel
+                l_enhanced = clahe.apply(l)
+                
+                # Merge channels back
+                lab_enhanced = cv2.merge((l_enhanced, a, b))
+                enhanced_rgb = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2RGB)
+                
+                # Prepare for blending
+                gradient_mask_3ch = np.stack([gradient_mask] * 3, axis=2)
+                
+                # Blend enhanced and original using gradient mask for smooth transition
+                image_enhanced = image_enhanced * (1 - gradient_mask_3ch) + enhanced_rgb * gradient_mask_3ch
+                
+                # Check processing time again
+                if time.time() - start_time > max_processing_time:
+                    print("Dark area enhancement taking too long, skipping gamma correction")
+                    return image_enhanced
+                
+                # Additional gamma correction specifically for dark areas
+                if dark_pixel_percentage > 20:
+                    # Create adaptive gamma based on darkness
+                    gamma = 0.7 if dark_pixel_percentage > 50 else 0.8
+                    lookup_table = np.array([((i / 255.0) ** gamma) * 255 for i in range(0, 256)]).astype("uint8")
+                    
+                    # Apply gamma correction only to dark areas with smooth transition
+                    for i in range(3):
+                        # Only apply to darker parts of the image
+                        temp = image_enhanced[:,:,i].copy()
+                        temp = cv2.LUT(temp, lookup_table)
+                        image_enhanced[:,:,i] = image_enhanced[:,:,i] * (1 - gradient_mask_3ch[:,:,i]) + \
+                                                temp * gradient_mask_3ch[:,:,i]
+                
+                # Skip the edge enhancement if we're running out of time
+                if time.time() - start_time > max_processing_time:
+                    return image_enhanced
+                
+                # Skip edge enhancement and additional operations to save time
+            
+            return image_enhanced
         
-        return image_enhanced
+        except Exception as e:
+            print(f"Error in dark area enhancement: {e}")
+            # If anything fails, return original image
+            return image
     
     def _detect_edges(self, label_image, edge_strength, edge_width, edge_style='normal'):
         """
