@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paint by Numbers Results</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Paint by Numbers Generator</h1>
+            <p>Your template is ready!</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card">
+            <h2>Your Paint-by-Numbers Template</h2>
+            
+            <div class="result-content">
+                <!-- Preview Image -->
+                <div class="preview-box">
+                    <img src="{{ preview_url }}" alt="Template Preview" class="main-preview">
+                </div>
+                
+                <!-- Paintability Score -->
+                {% if paintability %}
+                <div class="paintability-container">
+                    <div class="paintability-score 
+                        {% if paintability >= 80 %}score-excellent
+                        {% elif paintability >= 60 %}score-good
+                        {% elif paintability >= 40 %}score-moderate
+                        {% else %}score-challenging{% endif %}">
+                        <div class="score-number">{{ paintability }}</div>
+                        <div class="score-label">Paintability Score</div>
+                        <div class="score-level">
+                            {% if paintability >= 80 %}
+                                Excellent
+                            {% elif paintability >= 60 %}
+                                Good
+                            {% elif paintability >= 40 %}
+                                Moderate
+                            {% else %}
+                                Challenging
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Analysis Information -->
+                {% if analysis %}
+                <div class="analysis-container">
+                    <h3>Image Analysis</h3>
+                    <table class="analysis-table">
+                        <tr>
+                            <td><strong>Image Type:</strong></td>
+                            <td>{{ analysis.image_type|capitalize }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Dark Area:</strong></td>
+                            <td>{{ analysis.dark_percentage }}%</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Complexity:</strong></td>
+                            <td>{{ analysis.edge_complexity|capitalize }}</td>
+                        </tr>
+                    </table>
+                </div>
+                {% endif %}
+                
+                <!-- Download Buttons -->
+                <div class="download-section">
+                    <h3>Download Files</h3>
+                    <div class="download-buttons">
+                        <a href="{{ pdf_url }}" class="download-button pdf-button" download>
+                            <span class="icon">📄</span>
+                            <span>Complete PDF</span>
+                        </a>
+                        
+                        <a href="{{ template_url }}" class="download-button template-button" download>
+                            <span class="icon">🖼️</span>
+                            <span>Template Image</span>
+                        </a>
+                        
+                        <a href="{{ chart_url }}" class="download-button chart-button" download>
+                            <span class="icon">🎨</span>
+                            <span>Color Chart</span>
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- Template Style Options -->
+                {% if minimal_url or detailed_url %}
+                <div class="style-options">
+                    <h3>Alternative Styles</h3>
+                    <div class="style-buttons">
+                        {% if minimal_url %}
+                        <a href="{{ minimal_url }}" class="style-button" download>
+                            <span>Minimal Style</span>
+                        </a>
+                        {% endif %}
+                        
+                        {% if detailed_url %}
+                        <a href="{{ detailed_url }}" class="style-button" download>
+                            <span>Detailed Style</span>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="back-container">
+                <a href="/" class="btn btn-secondary">Create Another</a>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Paint by Numbers Generator</p>
+        </div>
+    </footer>
+</body>
+</html>
