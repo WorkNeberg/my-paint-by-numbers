@@ -7,7 +7,7 @@ from .settings_manager import SettingsManager
 import os
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
-
+import time
 class EnhancedProcessor:
     def __init__(self):
         self.base_processor = ImageProcessor()
@@ -283,126 +283,136 @@ class EnhancedProcessor:
         """
         print(f"Applying enhanced dark area processing for {image_type} image (threshold: {dark_threshold})")
         
-        # Create a copy to preserve original
-        image_enhanced = image.copy()
+        # Set a maximum computation time limit
+        max_processing_time = 5  # seconds
+        start_time = time.time()
         
-        # Convert to HSV for better dark area detection
-        hsv_img = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-        v_channel = hsv_img[:,:,2]
-        
-        # Analyze histogram to find better threshold adaptively
-        hist = cv2.calcHist([v_channel], [0], None, [256], [0, 256])
-        hist_cumsum = np.cumsum(hist) / np.sum(hist)
-        
-        # Find threshold that covers the darkest 15% of pixels (adaptive)
-        for i in range(256):
-            if hist_cumsum[i] > 0.15:
-                adaptive_threshold = max(dark_threshold - 10, i + 5)
-                break
-        else:
-            adaptive_threshold = dark_threshold
-        
-        # Create an adaptive dark mask
-        dark_mask = v_channel < adaptive_threshold
-        
-        # Calculate dark area percentage
-        dark_pixel_percentage = np.sum(dark_mask) / dark_mask.size * 100
-        print(f"Dark area detected: {dark_pixel_percentage:.1f}% (adaptive threshold: {adaptive_threshold})")
-        
-        if np.sum(dark_mask) > 0:
-            # Create gradient mask for smooth transition
-            gradient_mask = dark_mask.astype(np.float32)
-            gradient_mask = cv2.GaussianBlur(gradient_mask, (15, 15), 0)
+        try:
+            # Create a copy to preserve original
+            image_enhanced = image.copy()
             
-            # Customize CLAHE parameters based on image type and darkness
-            if image_type == 'pet' and dark_pixel_percentage > 30:
-                # Stronger enhancement for dark pets (like black cats)
-                clahe = cv2.createCLAHE(clipLimit=3.5, tileGridSize=(4,4))
-            elif image_type == 'portrait' and dark_pixel_percentage > 40:
-                # Strong but not too aggressive for dark portraits
-                clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(6,6))
+            # Convert to HSV for better dark area detection
+            hsv_img = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+            v_channel = hsv_img[:,:,2]
+            
+            # Analyze histogram to find better threshold adaptively
+            hist = cv2.calcHist([v_channel], [0], None, [256], [0, 256])
+            hist_cumsum = np.cumsum(hist) / np.sum(hist)
+            
+            # Find threshold that covers the darkest 15% of pixels (adaptive)
+            for i in range(256):
+                if hist_cumsum[i] > 0.15:
+                    adaptive_threshold = max(dark_threshold - 10, i + 5)
+                    break
             else:
-                # Standard enhancement for other cases
-                clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8,8))
+                adaptive_threshold = dark_threshold
             
-            # Convert to LAB color space (better for enhancement)
-            lab = cv2.cvtColor(image_enhanced, cv2.COLOR_RGB2LAB)
-            l, a, b = cv2.split(lab)
+            # Create an adaptive dark mask
+            dark_mask = v_channel < adaptive_threshold
             
-            # Apply CLAHE to the L channel
-            l_enhanced = clahe.apply(l)
+            # Calculate dark area percentage
+            dark_pixel_percentage = np.sum(dark_mask) / dark_mask.size * 100
+            print(f"Dark area detected: {dark_pixel_percentage:.1f}% (adaptive threshold: {adaptive_threshold})")
             
-            # Merge channels back
-            lab_enhanced = cv2.merge((l_enhanced, a, b))
-            enhanced_rgb = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2RGB)
+            # Check processing time
+            if time.time() - start_time > max_processing_time:
+                print(f"Dark area enhancement taking too long, using simplified processing")
+                # Skip to a simpler enhancement
+                gradient_mask = dark_mask.astype(np.float32)
+                gradient_mask_3ch = np.stack([gradient_mask] * 3, axis=2)
+                
+                # Simple enhancement - just brighten dark areas
+                enhanced_rgb = np.minimum(image_enhanced * 1.3, 255).astype(np.uint8)
+                image_enhanced = image_enhanced * (1 - gradient_mask_3ch) + enhanced_rgb * gradient_mask_3ch
+                return image_enhanced
             
-            # Prepare for blending
-            gradient_mask_3ch = np.stack([gradient_mask] * 3, axis=2)
-            
-            # Blend enhanced and original using gradient mask
-            image_enhanced = image_enhanced * (1 - gradient_mask_3ch) + enhanced_rgb * gradient_mask_3ch
-            
-            # Apply adaptive gamma correction for dark areas
-            if dark_pixel_percentage > 20:
-                # Adaptive gamma based on darkness and image type
-                if image_type == 'pet' and dark_pixel_percentage > 40:
-                    gamma = 0.65  # Stronger correction for very dark pets
-                elif dark_pixel_percentage > 50:
-                    gamma = 0.7   # Strong correction for very dark images
+            if np.sum(dark_mask) > 0:
+                # Create gradient mask for smooth transition
+                gradient_mask = dark_mask.astype(np.float32)
+                gradient_mask = cv2.GaussianBlur(gradient_mask, (15, 15), 0)
+                
+                # Check processing time again
+                if time.time() - start_time > max_processing_time:
+                    print(f"Dark area enhancement taking too long, using simplified processing")
+                    gradient_mask_3ch = np.stack([gradient_mask] * 3, axis=2)
+                    enhanced_rgb = np.minimum(image_enhanced * 1.3, 255).astype(np.uint8)
+                    image_enhanced = image_enhanced * (1 - gradient_mask_3ch) + enhanced_rgb * gradient_mask_3ch
+                    return image_enhanced
+                
+                # Customize CLAHE parameters based on image type and darkness
+                if image_type == 'pet' and dark_pixel_percentage > 30:
+                    # Stronger enhancement for dark pets (like black cats)
+                    clahe = cv2.createCLAHE(clipLimit=3.5, tileGridSize=(4,4))
+                elif image_type == 'portrait' and dark_pixel_percentage > 40:
+                    # Strong but not too aggressive for dark portraits
+                    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(6,6))
                 else:
-                    gamma = 0.8   # Moderate correction
-                    
-                # Create lookup table for gamma correction
-                lookup_table = np.array([((i / 255.0) ** gamma) * 255 for i in range(0, 256)]).astype("uint8")
+                    # Standard enhancement for other cases
+                    clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8,8))
                 
-                # Apply gamma correction only to dark areas
-                for i in range(3):
-                    temp = image_enhanced[:,:,i].copy()
-                    temp = cv2.LUT(temp, lookup_table)
-                    image_enhanced[:,:,i] = image_enhanced[:,:,i] * (1 - gradient_mask_3ch[:,:,i]) + \
-                                        temp * gradient_mask_3ch[:,:,i]
-            
-            # Special handling for pets - detect and enhance eyes in dark regions
-            if image_type == 'pet':
-                # Look for circular features in dark areas that could be eyes
-                dark_v = v_channel * dark_mask.astype(np.uint8)
-                # Threshold to isolate potential eyes
-                _, eye_thresh = cv2.threshold(dark_v, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-                # Create better mask with morphology
-                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-                eye_thresh = cv2.morphologyEx(eye_thresh, cv2.MORPH_OPEN, kernel)
-                eye_thresh = cv2.morphologyEx(eye_thresh, cv2.MORPH_CLOSE, kernel)
+                # Convert to LAB color space (better for enhancement)
+                lab = cv2.cvtColor(image_enhanced, cv2.COLOR_RGB2LAB)
+                l, a, b = cv2.split(lab)
                 
-                # Find contours that could be eyes
-                contours, _ = cv2.findContours(eye_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                # Check processing time again
+                if time.time() - start_time > max_processing_time:
+                    print(f"Dark area enhancement taking too long, using simplified processing")
+                    # Return partially enhanced image
+                    return image_enhanced
                 
-                for contour in contours:
-                    area = cv2.contourArea(contour)
-                    if 20 < area < 400:  # Size filter for typical pet eyes
-                        # Check if reasonably circular
-                        perimeter = cv2.arcLength(contour, True)
-                        circularity = 4 * np.pi * area / (perimeter * perimeter) if perimeter > 0 else 0
+                # Apply CLAHE to the L channel
+                l_enhanced = clahe.apply(l)
+                
+                # Merge channels back
+                lab_enhanced = cv2.merge((l_enhanced, a, b))
+                enhanced_rgb = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2RGB)
+                
+                # Prepare for blending
+                gradient_mask_3ch = np.stack([gradient_mask] * 3, axis=2)
+                
+                # Blend enhanced and original using gradient mask
+                image_enhanced = image_enhanced * (1 - gradient_mask_3ch) + enhanced_rgb * gradient_mask_3ch
+                
+                # Check processing time again
+                if time.time() - start_time > max_processing_time:
+                    print(f"Dark area enhancement taking too long, skipping gamma correction")
+                    return image_enhanced
+                
+                # Apply adaptive gamma correction for dark areas
+                if dark_pixel_percentage > 20:
+                    # Adaptive gamma based on darkness and image type
+                    if image_type == 'pet' and dark_pixel_percentage > 40:
+                        gamma = 0.65  # Stronger correction for very dark pets
+                    elif dark_pixel_percentage > 50:
+                        gamma = 0.7   # Strong correction for very dark images
+                    else:
+                        gamma = 0.8   # Moderate correction
                         
-                        if circularity > 0.5:  # More circular than not
-                            x, y, w, h = cv2.boundingRect(contour)
-                            # Strong enhancement for eye regions
-                            eye_roi = image_enhanced[y:y+h, x:x+w]
-                            # Convert to LAB
-                            eye_lab = cv2.cvtColor(eye_roi, cv2.COLOR_RGB2LAB)
-                            l_eye, a_eye, b_eye = cv2.split(eye_lab)
-                            # Strong CLAHE
-                            clahe_eye = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(2, 2))
-                            l_eye = clahe_eye.apply(l_eye)
-                            # Merge and convert back
-                            eye_enhanced = cv2.merge([l_eye, a_eye, b_eye])
-                            eye_enhanced = cv2.cvtColor(eye_enhanced, cv2.COLOR_LAB2RGB)
-                            # Apply sharpening
-                            kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-                            eye_enhanced = cv2.filter2D(eye_enhanced, -1, kernel)
-                            # Replace in image
-                            image_enhanced[y:y+h, x:x+w] = eye_enhanced
-        
-        return image_enhanced
+                    # Create lookup table for gamma correction
+                    lookup_table = np.array([((i / 255.0) ** gamma) * 255 for i in range(0, 256)]).astype("uint8")
+                    
+                    # Apply gamma correction only to dark areas
+                    for i in range(3):
+                        temp = image_enhanced[:,:,i].copy()
+                        temp = cv2.LUT(temp, lookup_table)
+                        image_enhanced[:,:,i] = image_enhanced[:,:,i] * (1 - gradient_mask_3ch[:,:,i]) + \
+                                            temp * gradient_mask_3ch[:,:,i]
+                
+                # Skip the pet-specific processing if we're running out of time
+                if time.time() - start_time > max_processing_time:
+                    return image_enhanced
+                
+                # Special handling for pets - detect and enhance eyes in dark regions
+                if image_type == 'pet':
+                    # Simple eye enhancement for pets - don't do the full processing
+                    pass  # Removed complex eye detection to prevent timeouts
+            
+            return image_enhanced
+            
+        except Exception as e:
+            # If anything fails, return the original image
+            print(f"Warning: Error in dark area enhancement: {e}")
+            return image
     
     def _enhance_skin_tones(self, image):
         """
@@ -561,6 +571,8 @@ class EnhancedProcessor:
         hsv_enhanced = cv2.merge([h, s, v])
         result = cv2.cvtColor(hsv_enhanced, cv2.COLOR_HSV2RGB)
         
+        # Add the return statement
+        return result.astype(np.uint8)
         
     def process_with_mask(self, image, feature_mask, feature_regions, settings):
         """

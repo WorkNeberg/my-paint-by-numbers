@@ -125,9 +125,6 @@ class ImageProcessor:
         # Create label image
         label_image = labels.reshape(h, w)
         
-        # Continue with the rest of the processing...
-        # [Rest of the process_image function remains unchanged]
-        
         # Step 4: Merge small regions if requested
         if merge_regions_level != 'none':
             print(f"Applying region merging level: {merge_regions_level}")
@@ -169,6 +166,21 @@ class ImageProcessor:
                 new_centers[i] = centers[label]
                 
             centers = new_centers
+            
+            # Added new code: Safety check to ensure label indices match centers array size
+            unique_labels = np.unique(label_image)
+            if np.max(unique_labels) >= len(centers):
+                print("Warning: Label indices don't match centers array. Remapping...")
+                # Create a mapping from old labels to new consecutive indices
+                label_mapping = {old_label: new_index for new_index, old_label in enumerate(unique_labels)}
+                
+                # Update the label image with new consecutive indices
+                new_label_image = np.zeros_like(label_image)
+                for old_label, new_label in label_mapping.items():
+                    new_label_image[label_image == old_label] = new_label
+                    
+                # Update label_image to use the new consecutive indices
+                label_image = new_label_image
         
         # Step 5: Recreate the quantized image using updated labels
         flat_labels = label_image.flatten()

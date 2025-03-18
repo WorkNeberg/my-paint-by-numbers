@@ -124,45 +124,113 @@ class PaintByNumbersGenerator:
             
         return enriched_data
     
-    def create_template(self, image_shape, edges, region_data, label_image, style="classic", edge_style="normal"):
+    def create_template(self, shape, edges, region_data, label_image, style="classic", edge_style="normal"):
         """
-        Create the paint-by-numbers template image
+        Create a paint-by-numbers template with numbers
         
         Parameters:
-        - image_shape: Shape of the original image
+        - shape: Shape of the image (height, width)
         - edges: Edge map
-        - region_data: Information about each region
-        - label_image: Label map from segmentation (needed for number placement)
-        - style: Style of number placement ('classic', 'minimal', 'detailed')
+        - region_data: Data about each region
+        - label_image: Image with region labels
+        - style: Template style ('classic', 'minimal', 'detailed')
         - edge_style: Style of edges ('normal', 'soft', 'thin')
+        
+        Returns:
+        - Template image with numbers
         """
-        # Create white background
-        template = np.ones((*image_shape[:2], 3), dtype=np.uint8) * 255
+        h, w = shape[:2]
         
-        # Place numbers according to selected style
-        numbered_template = self.number_placer.place_numbers(
-            label_image=label_image,  # FIXED: Use the actual label image
-            region_data=region_data,
-            style=style
-        )
+        # Create template with white background
+        template = np.ones((h, w, 3), dtype=np.uint8) * 255
         
-        # Apply edges with style
-        if edge_style == 'soft':
-            # Use gray edges instead of black
-            for i in range(3):
-                numbered_template[:,:,i] = np.where(edges > 0, 180, numbered_template[:,:,i])
-        elif edge_style == 'thin':
-            # Thin the edges before applying
-            kernel = np.ones((2,2), np.uint8)
-            thin_edges = cv2.erode(edges, kernel)
-            for i in range(3):
-                numbered_template[:,:,i] = np.where(thin_edges > 0, 0, numbered_template[:,:,i])
-        else:  # normal
-            # Standard black edges
-            for i in range(3):
-                numbered_template[:,:,i] = np.where(edges > 0, 0, numbered_template[:,:,i])
+        # Ensure edges are present and visible
+        if np.max(edges) == 0:
+            print("Warning: No edges detected. Generating edges from label image.")
+            # Generate edges from label differences
+            horiz_edges = (label_image[:-1, :] != label_image[1:, :])
+            vert_edges = (label_image[:, :-1] != label_image[:, 1:])
+            
+            # Create edge map
+            edges = np.zeros((h, w), dtype=np.uint8)
+            edges[:-1, :][horiz_edges] = 255
+            edges[1:, :][horiz_edges] = 255
+            edges[:, :-1][vert_edges] = 255
+            edges[:, 1:][vert_edges] = 255
         
-        return numbered_template
+        # Determine edge intensity based on style
+        if edge_style == "soft":
+            edge_intensity = 80  # Medium gray
+        elif edge_style == "thin":
+            edge_intensity = 0   # Black
+            # Thin the edges if needed
+            kernel = np.ones((2, 2), np.uint8)
+            edges = cv2.erode(edges, kernel)
+        else:  # "normal" or any other
+            edge_intensity = 0   # Black
+            
+        # Apply edges with proper intensity and ensure they're visible
+        for i in range(3):
+            template[:,:,i] = np.where(edges > 0, edge_intensity, template[:,:,i])
+        
+        # Apply different styles
+        if style == "minimal":
+            # Minimal style has only edges and small numbers
+            font_scale = 0.4
+            thickness = 1
+            number_color = (100, 100, 100)  # Gray numbers
+        elif style == "detailed":
+            # Detailed style has edges, numbers, and region shading
+            font_scale = 0.5
+            thickness = 1
+            number_color = (0, 0, 0)  # Black numbers
+            
+            # Add light shading to alternate regions for better visibility
+            for i, region in enumerate(region_data):
+                mask = (label_image == region['id']).astype(np.uint8)
+                if i % 2 == 0:
+                    # Apply light gray shading
+                    for c in range(3):
+                        template[:,:,c] = np.where(mask == 1, 245, template[:,:,c])
+        else:  # "classic" or default
+            # Classic style has clear edges and normal sized numbers
+            font_scale = 0.5
+            thickness = 1
+            number_color = (0, 0, 0)  # Black numbers
+        
+        # Place region numbers
+        for region in region_data:
+            if 'center' in region and region['area'] > 20:
+                # Calculate font size based on region area
+                area = region['area']
+                adaptive_scale = min(max(area / 5000, 0.3), 1.0) * font_scale
+                
+                # Get region center
+                cx, cy = region['center']
+                
+                # Create the number text
+                number = str(region['id'] + 1)  # Use 1-based indexing for user-friendliness
+                
+                # Calculate text size
+                (text_width, text_height), _ = cv2.getTextSize(
+                    number, cv2.FONT_HERSHEY_SIMPLEX, adaptive_scale, thickness
+                )
+                
+                # Adjust position to center the text
+                text_x = cx - text_width // 2
+                text_y = cy + text_height // 2
+                
+                # Ensure text is within image bounds
+                text_x = max(0, min(text_x, w - text_width))
+                text_y = max(text_height, min(text_y, h))
+                
+                # Draw the number
+                cv2.putText(
+                    template, number, (text_x, text_y),
+                    cv2.FONT_HERSHEY_SIMPLEX, adaptive_scale, number_color, thickness
+                )
+        
+        return template
     
     def create_color_chart(self, region_data):
         """Create color reference chart image"""
