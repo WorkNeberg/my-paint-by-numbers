@@ -14,7 +14,160 @@ class FeaturePreserver:
         
         # For pets
         self.pet_face_cascade = cv2.CascadeClassifier(os.path.join(cascade_dir, 'haarcascade_frontalface_alt.xml'))
+    def detect_and_preserve_features(self, image, image_type):
+        """
+        Detect and create a map of important features that should be preserved
         
+        Parameters:
+        - image: Input RGB image
+        - image_type: Type of image ('portrait', 'pet', 'landscape', etc.)
+        
+        Returns:
+        - Feature importance map (0-1 float) where higher values indicate more important areas
+        """
+        h, w = image.shape[:2]
+        feature_map = np.zeros((h, w), dtype=np.float32)
+        
+        # Convert to grayscale for feature detection
+        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        
+        # Base feature detection from edges (important for all image types)
+        edges = cv2.Canny(gray, 50, 150)
+        edge_density = cv2.GaussianBlur(edges.astype(float) / 255.0, (15, 15), 0)
+        feature_map += edge_density * 0.5
+        
+        # Add local contrast as an indicator of important features
+        local_std = np.zeros_like(gray, dtype=np.float32)
+        cv2.boxFilter(np.square(gray - cv2.boxFilter(gray, -1, (5, 5))), -1, (5, 5), local_std)
+        local_std = np.sqrt(local_std)
+        local_std = local_std / np.max(local_std) if np.max(local_std) > 0 else local_std
+        feature_map += local_std * 0.3
+        
+        # Type-specific feature detection
+        if image_type == 'portrait':
+            try:
+                # Detect faces
+                faces = self.face_cascade.detectMultiScale(gray, 1.3, 5)
+                
+                for (x, y, w_face, h_face) in faces:
+                    # Create face importance mask (higher in center, fading outward)
+                    y_grid, x_grid = np.mgrid[y:y+h_face, x:x+w_face]
+                    face_center_y, face_center_x = y + h_face/2, x + w_face/2
+                    
+                    # Calculate distance from center (normalized)
+                    dist = np.sqrt(((x_grid - face_center_x) / (w_face/2))**2 + 
+                                ((y_grid - face_center_y) / (h_face/2))**2)
+                    
+                    # Create radial gradient (1.0 at center, fading outward)
+                    face_importance = np.clip(1.0 - dist*0.8, 0, 1)
+                    
+                    # Apply to feature map
+                    feature_map[y:y+h_face, x:x+w_face] = np.maximum(
+                        feature_map[y:y+h_face, x:x+w_face],
+                        face_importance * 0.8
+                    )
+                    
+                    # Detect eyes within the face region
+                    face_roi_gray = gray[y:y+h_face, x:x+w_face]
+                    eyes = self.eye_cascade.detectMultiScale(face_roi_gray)
+                    
+                    for (ex, ey, ew, eh) in eyes:
+                        # Create circular region of high importance for each eye
+                        eye_center_y, eye_center_x = y + ey + eh/2, x + ex + ew/2
+                        eye_radius = max(ew, eh) * 0.7
+                        
+                        # Create radial mask for eye
+                        y_grid, x_grid = np.mgrid[0:h, 0:w]
+                        dist = np.sqrt((x_grid - eye_center_x)**2 + (y_grid - eye_center_y)**2)
+                        eye_mask = np.clip(1.0 - dist/eye_radius, 0, 1)
+                        
+                        # Apply to feature map
+                        feature_map = np.maximum(feature_map, eye_mask * 0.95)
+            
+            except Exception as e:
+                print(f"Warning: Error in portrait feature detection: {e}")
+        
+        elif image_type == 'pet':
+            try:
+                # Try to detect pet face
+                pet_faces = self.pet_face_cascade.detectMultiScale(gray, 1.1, 3)
+                
+                if len(pet_faces) > 0:
+                    # Pet face detected
+                    for (x, y, w_face, h_face) in pet_faces:
+                        # Create importance mask for pet face
+                        y_grid, x_grid = np.mgrid[y:y+h_face, x:x+w_face]
+                        face_center_y, face_center_x = y + h_face/2, x + w_face/2
+                        
+                        # Calculate distance from center (normalized)
+                        dist = np.sqrt(((x_grid - face_center_x) / (w_face/2))**2 + 
+                                    ((y_grid - face_center_y) / (h_face/2))**2)
+                        
+                        # Create radial gradient (1.0 at center, fading outward)
+                        face_importance = np.clip(1.0 - dist*0.7, 0, 1)
+                        
+                        # Apply to feature map
+                        feature_map[y:y+h_face, x:x+w_face] = np.maximum(
+                            feature_map[y:y+h_face, x:x+w_face],
+                            face_importance * 0.8
+                        )
+                        
+                        # Typical eye positions for pets
+                        eye_y = y + int(h_face * 0.4)
+                        left_eye_x = x + int(w_face * 0.3)
+                        right_eye_x = x + int(w_face * 0.7)
+                        
+                        # Create circular regions for eyes
+                        eye_radius = h_face * 0.15
+                        
+                        # Create radial masks for eyes
+                        y_grid, x_grid = np.mgrid[0:h, 0:w]
+                        
+                        # Left eye
+                        left_dist = np.sqrt((x_grid - left_eye_x)**2 + (y_grid - eye_y)**2)
+                        left_eye_mask = np.clip(1.0 - left_dist/eye_radius, 0, 1)
+                        left_eye_mask[left_eye_mask < 0] = 0
+                        feature_map = np.maximum(feature_map, left_eye_mask * 0.95)
+                        
+                        # Right eye
+                        right_dist = np.sqrt((x_grid - right_eye_x)**2 + (y_grid - eye_y)**2)
+                        right_eye_mask = np.clip(1.0 - right_dist/eye_radius, 0, 1)
+                        right_eye_mask[right_eye_mask < 0] = 0
+                        feature_map = np.maximum(feature_map, right_eye_mask * 0.95)
+                
+                else:
+                    # Fallback - use blob detection to find eyes
+                    params = cv2.SimpleBlobDetector_Params()
+                    params.minThreshold = 10
+                    params.maxThreshold = 200
+                    params.filterByArea = True
+                    params.minArea = 30
+                    params.maxArea = 300
+                    params.filterByCircularity = True
+                    params.minCircularity = 0.5
+                    
+                    detector = cv2.SimpleBlobDetector_create(params)
+                    keypoints = detector.detect(255 - gray)
+                    
+                    for kp in keypoints:
+                        # Create circular region of high importance for potential eyes
+                        center_x, center_y = int(kp.pt[0]), int(kp.pt[1])
+                        radius = kp.size * 0.8
+                        
+                        y_grid, x_grid = np.mgrid[0:h, 0:w]
+                        dist = np.sqrt((x_grid - center_x)**2 + (y_grid - center_y)**2)
+                        eye_mask = np.clip(1.0 - dist/radius, 0, 1)
+                        eye_mask[eye_mask < 0] = 0
+                        
+                        feature_map = np.maximum(feature_map, eye_mask * 0.95)
+            
+            except Exception as e:
+                print(f"Warning: Error in pet feature detection: {e}")
+        
+        # Normalize feature map to range [0, 1]
+        feature_map = np.clip(feature_map, 0, 1)
+        
+        return feature_map    
     def create_feature_mask(self, image, image_type):
         """
         Create a mask highlighting important features to preserve
