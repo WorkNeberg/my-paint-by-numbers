@@ -29,10 +29,28 @@ class EnhancedProcessor:
         """
         h, w = image.shape[:2]
         
+        # First, check if we need to enhance dark areas
+        need_dark_enhancement = settings.get('enhance_dark_areas', False)
+        
+        # Pre-apply dark area enhancement if needed
+        if need_dark_enhancement:
+            # Get the threshold
+            dark_threshold = settings.get('dark_threshold', 50)
+            # Apply dark area enhancement
+            image = self._enhance_dark_areas(image, dark_threshold, image_type)
+            
+            # Create a modified settings dictionary with enhance_dark_areas=False
+            # to prevent double enhancement
+            modified_settings = settings.copy()
+            modified_settings['enhance_dark_areas'] = False
+        else:
+            # If no dark enhancement needed, use original settings
+            modified_settings = settings
+        
         # Step 1: Create feature mask if feature preservation is enabled
         feature_mask = None
         feature_regions = None
-        if settings.get('preserve_features', False):
+        if modified_settings.get('preserve_features', False):
             feature_mask, feature_regions = self.feature_preserver.create_feature_mask(image, image_type)
             
             # Debug: Save feature mask
@@ -40,31 +58,36 @@ class EnhancedProcessor:
                 plt.imsave('debug_feature_mask.png', feature_mask, cmap='gray')
         
         # Step 2: Apply preprocessing and enhancements
-        processed_image = self.preprocess_image(image, settings, image_type)
+        processed_image = self.preprocess_image(image, modified_settings, image_type)
         
         # Step 3: Process with or without feature preservation
         if feature_mask is not None and np.any(feature_mask > 0):
-            return self.process_with_mask(processed_image, feature_mask, feature_regions, settings)
+            return self.process_with_mask(processed_image, feature_mask, feature_regions, modified_settings)
         else:
             # Use regular processing if no features to preserve or feature preservation disabled
-            return self.process_regular(processed_image, settings)
+            return self.process_regular(processed_image, modified_settings)
     
-    def preprocess_image(self, image, image_type='auto', enhance_dark_areas=True, 
-                        dark_threshold=50, enhance_colors=True, sharpen_level=1.0):
+    def preprocess_image(self, image, settings=None, image_type='auto'):
         """
         Enhanced preprocessing with adaptive settings based on image type and content
         
         Parameters:
         - image: Input RGB image
+        - settings: Dictionary of settings, or None
         - image_type: 'auto', 'portrait', 'pet', 'landscape', 'general', etc.
-        - enhance_dark_areas: Whether to enhance dark areas
-        - dark_threshold: Threshold for dark area enhancement
-        - enhance_colors: Whether to enhance colors
-        - sharpen_level: Level of sharpening to apply
         
         Returns:
         - Preprocessed image ready for PBN generation
         """
+        # Parse settings if provided
+        if settings is None:
+            settings = {}
+        
+        enhance_dark_areas = settings.get('enhance_dark_areas', False)
+        dark_threshold = settings.get('dark_threshold', 50)
+        enhance_colors = settings.get('enhance_colors', True)
+        sharpen_level = settings.get('sharpen_level', 1.0)
+        
         # Start with a copy of the image
         processed = image.copy()
         
@@ -678,6 +701,8 @@ class EnhancedProcessor:
         
     def process_regular(self, image, settings):
         """Process the entire image with uniform settings"""
+        
+        # Always pass enhance_dark_areas=False here to prevent double enhancement
         vectorized, label_image, edges, centers, region_data, paintability = (
             self.base_processor.process_image(
                 image,
@@ -685,7 +710,7 @@ class EnhancedProcessor:
                 settings.get('simplification_level', 'medium'),
                 settings.get('edge_strength', 1.0),
                 settings.get('edge_width', 1),
-                settings.get('enhance_dark_areas', False),
+                False,  # IMPORTANT: Always False to prevent double enhancement
                 settings.get('dark_threshold', 50),
                 settings.get('edge_style', 'normal'),
                 settings.get('merge_regions_level', 'normal'),
