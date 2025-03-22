@@ -154,7 +154,8 @@ class ImageProcessor:
                 min_region_percent=min_region_percent,
                 color_similarity_threshold=color_threshold,
                 feature_importance=feature_importance,  # Pass feature importance to merging
-                image_type=image_type  # Pass image type for specialized handling
+                image_type=image_type,  # Pass image type for specialized handling
+                merge_regions_level=merge_regions_level  # Pass merge regions level
             )
             
             # Get unique labels after merging
@@ -392,6 +393,50 @@ class ImageProcessor:
                     optimized_centers[i, 1] = min(255, int(optimized_centers[i, 1] * 1.1))
         
         return optimized_centers
+    def _optimize_pet_color_palette(self, centers, pet_type='generic'):
+        """
+        Optimize color palette specifically for pet images
+        
+        Parameters:
+        - centers: Color centers from k-means clustering
+        - pet_type: Type of pet ('cat', 'dog', 'generic')
+        
+        Returns:
+        - Optimized centers for pet coloring
+        """
+        optimized_centers = centers.copy()
+        
+        # Convert to HSV for better color manipulation
+        centers_hsv = cv2.cvtColor(centers.reshape(-1, 1, 3), cv2.COLOR_RGB2HSV).reshape(-1, 3)
+        
+        # Process each color in the palette
+        for i in range(len(centers_hsv)):
+            # Get HSV values
+            h, s, v = centers_hsv[i]
+            
+            # Don't modify colors that are too dark or too light
+            if 30 < v < 225:
+                # Slightly increase saturation for more vibrant fur colors
+                s = min(255, int(s * 1.15))
+                centers_hsv[i, 1] = s
+                
+                # For dog-specific processing
+                if pet_type == 'dog':
+                    # Enhance common dog fur colors (browns, tans)
+                    if 15 <= h <= 30:  # Brown/tan range
+                        centers_hsv[i, 1] = min(255, int(s * 1.2))  # More saturated browns
+                
+                # For cat-specific processing
+                elif pet_type == 'cat':
+                    # Enhance common cat colors (oranges, grays)
+                    if (15 <= h <= 25) or (h <= 20 and s <= 40):  # Orange or gray
+                        centers_hsv[i, 1] = min(255, int(s * 1.2))  # More saturated orange/defined gray
+        
+        # Convert back to RGB
+        optimized_centers_rgb = cv2.cvtColor(centers_hsv.reshape(-1, 1, 3), cv2.COLOR_HSV2RGB)
+        optimized_centers = optimized_centers_rgb.reshape(-1, 3)
+        
+        return optimized_centers
     def _enhance_dark_areas(self, image, dark_threshold):
         """
         Enhanced version for better dark area handling with adaptive approach
@@ -618,8 +663,8 @@ class ImageProcessor:
         
         return region_data
     def merge_small_regions(self, label_image, centers, min_region_percent=0.5, 
-                        color_similarity_threshold=30, feature_importance=None,
-                        image_type='general'):
+                       color_similarity_threshold=30, feature_importance=None,
+                       image_type='general', merge_regions_level='normal'):
         """
         Merge small regions into neighboring regions with similar colors,
         while preserving important features
@@ -631,14 +676,40 @@ class ImageProcessor:
         - color_similarity_threshold: Maximum color distance for merging (0-255)
         - feature_importance: Map of important features to preserve
         - image_type: Type of image for specialized handling
+        - merge_regions_level: Level of region merging ('none', 'low', 'normal', 'aggressive', 'smart')
         
         Returns:
         - Updated label_image with merged regions
         """
         h, w = label_image.shape
         total_pixels = h * w
-        min_pixels = int(total_pixels * min_region_percent / 100)
         
+        # Apply smart merging logic for pet images
+        if merge_regions_level == 'smart' and image_type == 'pet':
+            # Create a mask of important features for pets (eyes, nose, etc.)
+            is_near_feature = np.zeros((h, w), dtype=bool)
+            
+            if feature_importance is not None:
+                # Areas with importance > 0.6 are considered important features
+                is_near_feature = feature_importance > 0.6
+                
+                # Dilate to get areas near features too
+                is_near_feature = cv2.dilate(
+                    is_near_feature.astype(np.uint8), 
+                    np.ones((15, 15), np.uint8)
+                ).astype(bool)
+                
+                # Adjust merging parameters based on feature proximity
+                fur_min_region_percent = min_region_percent * 2.0  # More aggressive in fur areas
+                feature_min_region_percent = min_region_percent * 0.5  # Less merging near features
+                
+                fur_threshold = color_similarity_threshold + 20  # More relaxed matching in fur
+                feature_threshold = color_similarity_threshold - 10  # Stricter matching near features
+                
+                print("Using smart region merging for pet image - preserving facial features")
+        
+        # Calculate minimum region size in pixels
+        min_pixels = int(total_pixels * min_region_percent / 100)
         print(f"Merging small regions with feature preservation (min size: {min_region_percent}%, threshold: {min_pixels} pixels)")
         
         # Find region sizes
@@ -664,6 +735,8 @@ class ImageProcessor:
         
         # Calculate region importance if we have feature importance
         region_importance = {}
+        is_important_region = {}
+        
         if feature_importance is not None:
             for label in unique_labels:
                 region_mask = (label_image == label)
@@ -671,6 +744,7 @@ class ImageProcessor:
                     # Calculate average feature importance in this region
                     avg_importance = np.mean(feature_importance[region_mask])
                     region_importance[label] = avg_importance
+                    is_important_region[label] = avg_importance > 0.7
         
         # Process each small region
         for small_label in sorted_small_regions:
@@ -682,17 +756,32 @@ class ImageProcessor:
             small_mask = (merged_labels == small_label)
             
             # Check if this region has high importance
-            is_important_region = False
-            if feature_importance is not None and small_label in region_importance:
-                is_important_region = region_importance[small_label] > 0.7
+            is_high_importance = False
+            if small_label in is_important_region:
+                is_high_importance = is_important_region[small_label]
+            
+            # Check if this region is near important features
+            near_feature = False
+            if merge_regions_level == 'smart' and image_type == 'pet' and feature_importance is not None:
+                # Check if this region overlaps with the near-feature mask
+                near_feature = np.any(small_mask & is_near_feature)
             
             # Determine if this is a dark region
             is_dark_region = np.mean(centers[small_label]) < 60
             
-            # Customize thresholds based on importance and darkness
+            # Customize thresholds based on importance, darkness, and features
             current_threshold = color_similarity_threshold
+            current_min_pixels = min_pixels
             
-            if is_important_region:
+            # Apply smart merging logic
+            if merge_regions_level == 'smart' and image_type == 'pet':
+                if near_feature:
+                    current_threshold = feature_threshold
+                    print(f"Region {small_label} is near facial features - using stricter threshold")
+                else:
+                    current_threshold = fur_threshold
+            
+            if is_high_importance:
                 # More strict threshold for important regions
                 current_threshold *= 0.7
                 print(f"Preserving important region with label {small_label} (stricter threshold)")

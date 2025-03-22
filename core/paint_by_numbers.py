@@ -6,9 +6,10 @@ import time
 from core.image_processor import ImageProcessor
 from core.number_placement import NumberPlacer
 from core.image_analyzer import ImageAnalyzer
+from core.performance_optimizer import PerformanceOptimizer
 
 class PaintByNumbersGenerator:
-    def __init__(self):
+    def __init__(self, output_dir=None):
         # Initialize components
         self.processor = ImageProcessor()
         self.number_placer = NumberPlacer()
@@ -42,6 +43,7 @@ class PaintByNumbersGenerator:
             'Lavender': [230, 230, 250],
             'Beige': [245, 245, 220],
         }
+        self.performance_optimizer = PerformanceOptimizer()
     
     def get_color_name(self, rgb_value):
         """Find the nearest named color for an RGB value"""
@@ -160,14 +162,28 @@ class PaintByNumbersGenerator:
         
         # Determine edge intensity based on style
         if edge_style == "soft":
-            edge_intensity = 80  # Medium gray
+            edge_intensity = 180  # MUCH lighter gray (was 120)
         elif edge_style == "thin":
-            edge_intensity = 0   # Black
-            # Thin the edges if needed
-            kernel = np.ones((2, 2), np.uint8)
-            edges = cv2.erode(edges, kernel)
+            edge_intensity = 160  # MUCH lighter gray (was 50)
+        elif edge_style == "hierarchical":
+            # Create white background
+            template = np.ones((h, w, 3), dtype=np.uint8) * 255
+            
+            # Pet outline - make it BLACK (not dark gray)
+            outline_mask = (edges >= 240)  # Only the strongest edges
+            template[outline_mask] = [0, 0, 0]  # Pure black
+            
+            # Feature edges (eyes, nose) - dark gray
+            feature_mask = (edges >= 150) & (edges < 240)
+            template[feature_mask] = [60, 60, 60]  # Darker than before
+            
+            # Internal detail edges - very light (almost invisible)
+            detail_mask = (edges > 0) & (edges < 150)
+            template[detail_mask] = [220, 220, 220]  # Much lighter
+            
+            return template
         else:  # "normal" or any other
-            edge_intensity = 0   # Black
+            edge_intensity = 140  # MUCH lighter gray (was 30)
             
         # Apply edges with proper intensity and ensure they're visible
         for i in range(3):
@@ -198,9 +214,29 @@ class PaintByNumbersGenerator:
             thickness = 1
             number_color = (0, 0, 0)  # Black numbers
         
+        # Sort regions by size, largest first
+        region_data.sort(key=lambda x: x['area'], reverse=True)
+
+        # Assign numbers 1-9 to largest regions first
+        for i, region in enumerate(region_data):
+            if i < 9:
+                region['number'] = i + 1
+            else:
+                # For additional regions, use letters or repeated numbers
+                # This keeps numbering simpler
+                region['number'] = (i % 9) + 1
+
+        # Make numbers larger and clearer
+        font_scale = 0.6  # Increased from default
+        font_thickness = 2  # Thicker for visibility
+
+        # Add after sorting regions by size:
+        # Don't place numbers on eyes or tiny regions
+        min_area_for_number = h * w * 0.003  # Minimum 0.3% of image size
+
         # Place region numbers
         for region in region_data:
-            if 'center' in region and region['area'] > 20:
+            if 'center' in region and region['area'] > min_area_for_number:
                 # Calculate font size based on region area
                 area = region['area']
                 adaptive_scale = min(max(area / 5000, 0.3), 1.0) * font_scale
@@ -209,7 +245,7 @@ class PaintByNumbersGenerator:
                 cx, cy = region['center']
                 
                 # Create the number text
-                number = str(region['id'] + 1)  # Use 1-based indexing for user-friendliness
+                number = str(region['number'])  # Use 1-based indexing for user-friendliness
                 
                 # Calculate text size
                 (text_width, text_height), _ = cv2.getTextSize(
@@ -229,6 +265,29 @@ class PaintByNumbersGenerator:
                     template, number, (text_x, text_y),
                     cv2.FONT_HERSHEY_SIMPLEX, adaptive_scale, number_color, thickness
                 )
+        
+        # Create a two-level hierarchy:
+        
+        # 1. Pet outline - very dark
+        pet_outline = np.zeros_like(edges)
+        # Calculate the outer boundary of the entire pet
+        unique_labels = np.unique(label_image)
+        if 0 in unique_labels and len(unique_labels) > 1:
+            # 0 is typically background
+            pet_mask = (label_image > 0).astype(np.uint8)
+            # Dilate and subtract to find outline
+            dilated = cv2.dilate(pet_mask, np.ones((3,3), np.uint8))
+            pet_outline = dilated - pet_mask
+            # Make pet outline very dark
+            edges[pet_outline > 0] = 255  # Full black for pet outline
+        
+        # 2. Feature outlines (eyes, nose, etc.) - medium dark
+        # Keep original edge detection for features
+        
+        # 3. Internal details - light gray or removed
+        # Make non-feature, non-outline edges lighter
+        internal_edges = (edges > 0) & (pet_outline == 0)
+        edges[internal_edges] = 100  # Light gray for internal details
         
         return template
     
@@ -631,3 +690,167 @@ class PaintByNumbersGenerator:
                 print(f"Even fallback processing failed: {str(nested_e)}")
                 traceback.print_exc()
                 raise
+
+    def generate(self, image_path, **kwargs):
+        """Generate paint by numbers from an image"""
+        # Start timing for performance measurement
+        start_time = time.time()
+        
+        # Load image
+        image = cv2.imread(image_path)
+        if image is None:
+            raise ValueError(f"Could not load image: {image_path}")
+        
+        # Convert to RGB for processing
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        
+        # Compute hash for caching
+        settings_hash = self.performance_optimizer.compute_image_hash(image, kwargs)
+        
+        # Try to load from cache first
+        cached_result = self.performance_optimizer.cache_result(settings_hash)
+        if cached_result is not None:
+            print(f"Using cached result (saved {time.time() - start_time:.2f} seconds)")
+            return cached_result
+        
+        # Optimize image size for processing
+        processed_image, scale = self.performance_optimizer.optimize_image_size(image)
+        
+        # ...existing processing steps...
+        
+        # If you have any parallelizable steps, use process_in_parallel
+        # Example:
+        # segmented_regions = self.performance_optimizer.process_in_parallel(
+        #     regions, self.process_region
+        # )
+        
+        # For operations that benefit from multi-scale processing:
+        # feature_map = self.performance_optimizer.multi_scale_process(
+        #     processed_image, self.detect_features, scales=[0.5, 0.75, 1.0]
+        # )
+        
+        # ...rest of existing code...
+        
+        # Save result to cache before returning
+        self.performance_optimizer.cache_result(settings_hash, result)
+        
+        print(f"Processing completed in {time.time() - start_time:.2f} seconds")
+        return
+
+    def generate_numbered_template(self, segmented_image, colors, complexity='medium', feature_mask=None):
+        """Generate a template with numbers from a segmented image
+    
+        Args:
+            segmented_image: The color-segmented image
+            colors: List of colors used in the segmentation
+            complexity: Complexity level ('low', 'medium', 'high')
+            feature_mask: Optional mask highlighting important features (eyes, pet outline)
+    
+        Returns:
+            Template image with numbers
+        """
+        import cv2
+        import numpy as np
+        
+        # Create label image from the segmented image
+        h, w = segmented_image.shape[:2]
+        label_image = np.zeros((h, w), dtype=np.uint8)
+        
+        # Enhanced edge detection - use higher thresholds to reduce "wool" effect
+        gray = cv2.cvtColor(segmented_image, cv2.COLOR_RGB2GRAY)
+        
+        # Use bilateral filter to reduce noise while preserving edges
+        blurred = cv2.bilateralFilter(gray, 9, 75, 75)
+        
+        # Create pet outline - this is critical for seeing the shape
+        pet_outline = np.zeros_like(gray)
+        
+        # Use simpler edge detection with higher thresholds
+        edges = cv2.Canny(blurred, 150, 250)  # Higher thresholds = fewer edges
+        
+        # If we have feature mask, use it to prioritize important edges
+        if feature_mask is not None:
+            # Keep edges near important features
+            important_areas = (feature_mask > 0.6).astype(np.uint8)
+            important_areas = cv2.dilate(important_areas, np.ones((5,5),np.uint8))
+            
+            # Combine edges - keep strong edges and edges in important areas
+            pet_outline = cv2.bitwise_and(edges, important_areas*255)
+            
+            # Add this to the main edges
+            edges = cv2.bitwise_or(edges, pet_outline)
+        
+        # Extract pet contour - create a clearer outline of the entire shape
+        mask = np.zeros_like(gray)
+        mask[gray < 250] = 255  # Assume white/near-white is background
+        
+        # Find contours (pet outline)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Draw the pet outline with higher intensity (255)
+        cv2.drawContours(edges, contours, -1, 255, 2)
+
+        # Create a stronger mask specifically for the pet outline
+        pet_mask = np.zeros_like(gray)
+        _, threshold = cv2.threshold(blurred, 220, 255, cv2.THRESH_BINARY_INV)  # Better threshold for pet/background
+
+        # Remove small holes and noise
+        kernel = np.ones((5,5), np.uint8)
+        threshold = cv2.morphologyEx(threshold, cv2.MORPH_CLOSE, kernel)
+
+        # Find only the main large contour (the pet)
+        contours, _ = cv2.findContours(threshold, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # Sort by area and keep only the largest (the pet)
+        contours = sorted(contours, key=cv2.contourArea, reverse=True)[:1]
+
+        # Create a separate pet outline edge map
+        pet_outline = np.zeros_like(edges)
+        cv2.drawContours(pet_outline, contours, -1, 255, 3)  # Thicker outline (3px)
+
+        # Add the pet outline to the main edges but with maximum intensity
+        edges = cv2.bitwise_or(edges, pet_outline)
+        
+        # Find regions by comparing pixels to color palette
+        region_data = []
+        for i, color_info in enumerate(colors):
+            color_rgb = np.array(color_info['rgb'])
+            
+            # Increase tolerance for better region merging
+            tolerance = 15
+            mask = np.all((segmented_image >= (color_rgb - tolerance)) & 
+                          (segmented_image <= (color_rgb + tolerance)), axis=2)
+            
+            # Assign region ID to label image
+            label_image[mask] = i + 1
+            
+            # Calculate region area and center
+            area = np.sum(mask)
+            if area > 0:
+                y_coords, x_coords = np.where(mask)
+                cx = int(np.mean(x_coords))
+                cy = int(np.mean(y_coords))
+                
+                region_data.append({
+                    'id': i,
+                    'center': (cx, cy),
+                    'area': int(area),
+                    'color': color_rgb
+                })
+
+        # Map complexity to template style 
+        if complexity == 'low':
+            style = 'minimal'
+        elif complexity == 'high':
+            style = 'detailed'
+        else:
+            style = 'classic'
+            
+        # Use hierarchical edge style for better outline visibility
+        return self.create_template(
+            segmented_image.shape, 
+            edges, 
+            region_data, 
+            label_image, 
+            style=style, 
+            edge_style='hierarchical'  # Changed from 'soft' to 'hierarchical'
+        )

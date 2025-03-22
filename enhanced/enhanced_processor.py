@@ -8,64 +8,72 @@ import os
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 import time
+from enhanced.pet_pattern_preserver import PetPatternPreserver
+import logging
+
+# Add these imports at the very top of the file
+import os
+import cv2
+import numpy as np
+import logging
+from enhanced.pet_pattern_preserver import PetPatternPreserver
+from enhanced.image_type_detector import ImageTypeDetector
+from typing import Dict, Any, Union, Optional, List, Tuple
+
+# Setup logging
+logger = logging.getLogger('pbn-app')
+
 class EnhancedProcessor:
     def __init__(self):
-        self.base_processor = ImageProcessor()
-        self.feature_preserver = FeaturePreserver()
-        self.type_detector = ImageTypeDetector()
-        self.settings_manager = SettingsManager()
-        
-    def process_with_feature_preservation(self, image, settings, image_type):
-        """
-        Process image with special handling for important features
-        
-        Parameters:
-        - image: Input RGB image
-        - settings: Dictionary of processing settings
-        - image_type: Type of image for specialized processing
-        
-        Returns:
-        - result: Dictionary with processing results
-        """
-        h, w = image.shape[:2]
-        
-        # First, check if we need to enhance dark areas
-        need_dark_enhancement = settings.get('enhance_dark_areas', False)
-        
-        # Pre-apply dark area enhancement if needed
-        if need_dark_enhancement:
-            # Get the threshold
-            dark_threshold = settings.get('dark_threshold', 50)
-            # Apply dark area enhancement
-            image = self._enhance_dark_areas(image, dark_threshold, image_type)
+        """Initialize processor with pet pattern preservation"""
+        try:
+            # Import PetPatternPreserver
+            from enhanced.pet_pattern_preserver import PetPatternPreserver
+            self.pet_pattern_preserver = PetPatternPreserver()
             
-            # Create a modified settings dictionary with enhance_dark_areas=False
-            # to prevent double enhancement
-            modified_settings = settings.copy()
-            modified_settings['enhance_dark_areas'] = False
-        else:
-            # If no dark enhancement needed, use original settings
-            modified_settings = settings
-        
-        # Step 1: Create feature mask if feature preservation is enabled
-        feature_mask = None
-        feature_regions = None
-        if modified_settings.get('preserve_features', False):
-            feature_mask, feature_regions = self.feature_preserver.create_feature_mask(image, image_type)
+            # Import other required components
+            from enhanced.feature_preserver import FeaturePreserver
+            self.feature_preserver = FeaturePreserver()
             
-            # Debug: Save feature mask
-            if feature_mask is not None:
-                plt.imsave('debug_feature_mask.png', feature_mask, cmap='gray')
+            # Other initializations...
+            self.base_processor = ImageProcessor()
+            self.type_detector = ImageTypeDetector()
+            self.settings_manager = SettingsManager()
+            self.image_processor = None  # This would be your existing image processor
+            
+            # Log successful initialization
+            logging.getLogger('pbn-app').info("Initialized EnhancedProcessor with pet pattern preservation")
+        except Exception as e:
+            logging.getLogger('pbn-app').error(f"Error initializing EnhancedProcessor: {e}")
         
-        # Step 2: Apply preprocessing and enhancements
-        processed_image = self.preprocess_image(image, modified_settings, image_type)
+    def process_with_feature_preservation(self, image, settings, image_type='general', feature_mask=None):
+        """Process image while preserving important features"""
+        logger = logging.getLogger('pbn-app')
         
-        # Step 3: Process with or without feature preservation
-        if feature_mask is not None and np.any(feature_mask > 0):
-            return self.process_with_mask(processed_image, feature_mask, feature_regions, modified_settings)
-        else:
-            # Use regular processing if no features to preserve or feature preservation disabled
-            return self.process_regular(processed_image, modified_settings)
+        # Create feature mask if not provided
+        if feature_mask is None:
+            try:
+                feature_mask, _ = self.feature_preserver.create_feature_mask(image, image_type)
+            except Exception as e:
+                logger.error(f"Error creating feature mask: {e}")
+                feature_mask = np.zeros(image.shape[:2], dtype=np.uint8)
+        
+        # Check if image_processor exists and is not None
+        if hasattr(self, 'image_processor') and self.image_processor is not None:
+            try:
+                return self.image_processor.process_image(
+                    image, 
+                    settings.get('colors', 15),
+                    settings.get('complexity', 'medium'),
+                    feature_mask
+                )
+            except Exception as e:
+                logger.error(f"Error using image_processor: {e}")
+                # Fall back to basic processing
+        
+        # Always use the fallback if image_processor is None or fails
+        logger.info("Using fallback basic processing")
+        return self._create_basic_result(image, settings)
     
     def preprocess_image(self, image, settings=None, image_type='auto'):
         """
@@ -863,3 +871,408 @@ class EnhancedProcessor:
         # Save template comparison sheet
         template_comparison_path = os.path.join(output_dir, "template_comparison_sheet.png")
         plt.imsave(template_comparison_path, template_comparison)
+
+    def _enhance_fur_texture(self, image, fur_type='generic'):
+        """
+        Enhanced fur texture processing based on fur type
+        
+        Parameters:
+        - image: Input RGB image
+        - fur_type: String indicating fur type ('short', 'long', 'curly', etc.)
+        
+        Returns:
+        - Image with enhanced fur texture
+        """
+        # Convert to grayscale for texture analysis
+        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        
+        # Detect edges for fur texture map
+        edges = cv2.Canny(gray, 30, 150)
+        
+        # Different kernel sizes based on fur type
+        if fur_type == 'long':
+            kernel_size = 5
+            detail_boost = 1.4
+        elif fur_type == 'curly':
+            kernel_size = 3
+            detail_boost = 1.6
+        else:  # short or generic
+            kernel_size = 7
+            detail_boost = 1.2
+        
+        # Create fur mask with appropriate dilation
+        kernel = np.ones((kernel_size, kernel_size), np.uint8)
+        fur_mask = cv2.dilate(edges, kernel)
+        fur_mask = cv2.GaussianBlur(fur_mask, (5, 5), 0)
+        fur_mask = fur_mask / 255.0
+        
+        # Enhance details in fur areas
+        kernel = np.array([[-0.5,-0.5,-0.5], [-0.5,4+detail_boost,-0.5], [-0.5,-0.5,-0.5]])
+        sharpened = cv2.filter2D(image, -1, kernel)
+        
+        # Apply fur-specific color enhancement
+        hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+        h, s, v = cv2.split(hsv)
+        
+        # Slightly boost saturation for more vibrant fur
+        s = np.clip(s * 1.1, 0, 255).astype(np.uint8)
+        
+        # Blend enhanced image
+        enhanced_hsv = cv2.merge([h, s, v])
+        enhanced_color = cv2.cvtColor(enhanced_hsv, cv2.COLOR_HSV2RGB)
+        
+        # Create 3-channel mask
+        fur_mask_3ch = np.stack([fur_mask] * 3, axis=2)
+        
+        # Blend sharpened and color-enhanced versions
+        result = image * (1 - fur_mask_3ch) + (sharpened * 0.6 + enhanced_color * 0.4) * fur_mask_3ch
+        
+        return result.astype(np.uint8)
+
+    def _detect_pet_features(self, image):
+        """
+        Enhanced detection of pet features (eyes, nose, ears)
+        
+        Parameters:
+        - image: Input RGB image
+        
+        Returns:
+        - Dictionary of detected feature regions
+        """
+        features = {
+            'eyes': [],
+            'nose': [],
+            'ears': []
+        }
+        
+        # Convert to grayscale
+        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        
+        # Try cat face detection first
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalcatface.xml')
+        faces = face_cascade.detectMultiScale(gray, 1.1, 3)
+        
+        if len(faces) > 0:
+            # Use cat face detection results
+            for (x, y, w, h) in faces:
+                # Estimate eye positions (typically in upper half of face)
+                eye_y = y + int(h * 0.35)
+                left_eye_x = x + int(w * 0.3)
+                right_eye_x = x + int(w * 0.7)
+                eye_size = max(int(h * 0.1), 5)
+                
+                features['eyes'].append((left_eye_x, eye_y, eye_size*2, eye_size))
+                features['eyes'].append((right_eye_x, eye_y, eye_size*2, eye_size))
+                
+                # Estimate nose position (typically in center-bottom of face)
+                nose_x = x + int(w * 0.5)
+                nose_y = y + int(h * 0.65)
+                nose_size = max(int(h * 0.15), 8)
+                
+                features['nose'].append((nose_x, nose_y, nose_size, nose_size))
+        else:
+            # Fallback to dark region detection for eyes
+            v_channel = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)[:,:,2]
+            dark_regions = v_channel < 60
+            
+            if np.any(dark_regions):
+                dark_mask = dark_regions.astype(np.uint8) * 255
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
+                dark_mask = cv2.morphologyEx(dark_mask, cv2.MORPH_CLOSE, kernel)
+                
+                contours, _ = cv2.findContours(dark_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                
+                for contour in contours:
+                    area = cv2.contourArea(contour)
+                    if 20 < area < 500:  # Size filter for possible eyes
+                        x, y, w, h = cv2.boundingRect(contour)
+                        aspect_ratio = float(w) / h
+                        
+                        # Eyes typically have aspect ratio close to 1
+                        if 0.5 < aspect_ratio < 2.0:
+                            features['eyes'].append((x, y, w, h))
+        
+        return features
+
+    def _enhance_pet_by_color(self, image):
+        """
+        Apply specialized enhancement based on pet's dominant color
+        
+        Parameters:
+        - image: Input RGB image
+        
+        Returns:
+        - Enhanced image specific to pet color
+        """
+        # Analyze color histogram to determine dominant colors
+        hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+        h, s, v = cv2.split(hsv)
+        
+        # Get average brightness and saturation
+        avg_v = np.mean(v)
+        avg_s = np.mean(s)
+        
+        # Initialize enhanced image
+        enhanced = image.copy()
+        
+        # Special handling for dark/black pets (low brightness)
+        if avg_v < 70:
+            print("Detected dark/black pet - applying specialized enhancement")
+            
+            # Create dark mask
+            dark_mask = (v < 60).astype(np.float32)
+            dark_mask = cv2.GaussianBlur(dark_mask, (9, 9), 0)
+            dark_mask_3ch = np.stack([dark_mask] * 3, axis=2)
+            
+            # Apply stronger detail enhancement in dark areas
+            lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
+            l, a, b = cv2.split(lab)
+            
+            # Stronger CLAHE for dark pets
+            clahe = cv2.createCLAHE(clipLimit=3.5, tileGridSize=(4, 4))
+            l_enhanced = clahe.apply(l)
+            
+            # Merge and convert back
+            lab_enhanced = cv2.merge([l_enhanced, a, b])
+            dark_enhanced = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2RGB)
+            
+            # Apply sharpening to bring out details
+            kernel = np.array([[-0.5,-0.5,-0.5], [-0.5,6,-0.5], [-0.5,-0.5,-0.5]])
+            sharpened = cv2.filter2D(dark_enhanced, -1, kernel)
+            
+            # Blend original with enhanced version
+            enhanced = image * (1 - dark_mask_3ch * 0.8) + sharpened * (dark_mask_3ch * 0.8)
+            
+        # Special handling for white/light pets (high brightness, low saturation)
+        elif avg_v > 180 and avg_s < 50:
+            print("Detected white/light pet - applying specialized enhancement")
+            
+            # Enhance subtle details in light areas
+            # Increase contrast slightly to bring out subtle features
+            lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
+            l, a, b = cv2.split(lab)
+            
+            # Custom CLAHE for light pets - lower clip limit to avoid over-processing
+            clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8))
+            l_enhanced = clahe.apply(l)
+            
+            # Merge and convert back
+            lab_enhanced = cv2.merge([l_enhanced, a, b])
+            enhanced = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2RGB)
+        
+        return enhanced.astype(np.uint8)
+
+    def process_pet_image(self, image, settings):
+        """
+        Process pet image with pattern preservation
+        """
+        logger = logging.getLogger('pbn-app')
+        logger.info("Processing pet image with pattern preservation")
+        
+        # Make a copy of the image for processing
+        processed = image.copy()
+        h, w = processed.shape[:2]
+        
+        # Step 1: Detect and enhance pet patterns
+        feature_mask = np.zeros((h, w), dtype=np.uint8)
+        
+        # Use pet pattern preserver if available
+        if hasattr(self, 'pet_pattern_preserver'):
+            try:
+                logger.info("Calling pet pattern preserver")
+                pattern_mask, enhanced_image = self.pet_pattern_preserver.detect_and_preserve(processed)
+                
+                # Use enhanced image for further processing
+                processed = enhanced_image
+                
+                # Add pattern mask to feature mask
+                feature_mask = cv2.bitwise_or(feature_mask, pattern_mask)
+                
+                logger.info("Pet pattern preservation applied successfully")
+            except Exception as e:
+                logger.error(f"Error in pet pattern preservation: {e}", exc_info=True)
+        
+        # Step 2: Apply pre-processing
+        complexity = settings.get('complexity', 'medium')
+        
+        # Set blur intensity based on complexity
+        blur_size = 7 if complexity == 'low' else (3 if complexity == 'high' else 5)
+        
+        # Apply bilateral filter for smoothing while preserving edges
+        processed = cv2.bilateralFilter(processed, blur_size, 75, 75)
+        
+        # Step 3: Color quantization - use number of colors from settings
+        num_colors = settings.get('colors', 15)
+        
+        # Prepare image for k-means
+        pixels = processed.reshape(-1, 3).astype(np.float32)
+        
+        # Run k-means for color segmentation
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.2)
+        _, labels, centers = cv2.kmeans(pixels, num_colors, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+        
+        # Convert back to 8-bit image
+        centers = np.uint8(centers)
+        segmented_flat = centers[labels.flatten()]
+        segmented = segmented_flat.reshape(processed.shape)
+        
+        # Step 4: Apply edge enhancement to make regions distinct
+        edges = cv2.Canny(cv2.cvtColor(segmented, cv2.COLOR_RGB2GRAY), 50, 150)
+        edges = cv2.dilate(edges, np.ones((2, 2), np.uint8), iterations=1)
+        
+        # Create edge overlay
+        edge_overlay = segmented.copy()
+        edge_overlay[edges > 0] = [0, 0, 0]
+        
+        # Step 5: Create final output
+        result = {
+            'processed_image': processed,
+            'segmented_image': segmented,
+            'preview_image': edge_overlay,
+            'colors': [{'rgb': [int(c[0]), int(c[1]), int(c[2])], 'count': int(np.sum(labels == i))} for i, c in enumerate(centers)],
+            'paintability': 90,  # Custom paintability score for pets
+        }
+        
+        logger.info(f"Pet image processed with {num_colors} colors")
+        return result
+
+    def process_image(self, image_path, settings):
+        """Process image with specialized handling based on image type"""
+        logger = logging.getLogger('pbn-app')
+        
+        # Load image if path provided
+        if isinstance(image_path, str):
+            try:
+                logger.info(f"Reading image from: {image_path}")
+                file_size = os.path.getsize(image_path)
+                logger.info(f"File size: {file_size} bytes")
+                
+                image = cv2.imread(image_path)
+                if image is None:
+                    raise ValueError(f"Could not read image: {image_path}")
+                    
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                logger.info(f"Image shape after reading: {image.shape}")
+            except Exception as e:
+                logger.error(f"Error reading image: {e}")
+                raise
+        else:
+            image = image_path
+        
+        # CRITICAL: Get image type from settings properly
+        image_type = settings.get('image_type', 'general')
+        preset_type = settings.get('preset_type', '')
+        
+        # Double-check preset type for pet
+        if preset_type == 'pet':
+            image_type = 'pet'
+            settings['image_type'] = 'pet'
+            logger.info("Using pet preset - forcing image_type to pet")
+        
+        logger.info(f"Processing image as type: {image_type}")
+        
+        # Route to appropriate processing method
+        try:
+            if image_type == 'pet':
+                logger.info("*** USING PET IMAGE PROCESSING PATH ***")
+                return self.process_pet_image(image, settings)
+            elif image_type == 'portrait':
+                return self.process_portrait_image(image, settings)
+            elif image_type == 'landscape':
+                return self.process_landscape_image(image, settings)
+            else:
+                return self.process_generic_image(image, settings)
+        except Exception as e:
+            logger.error(f"Error in specialized processing: {str(e)}", exc_info=True)
+            # Fallback to generic processing
+            return self.process_generic_image(image, settings)
+    
+    def process_portrait_image(self, image, settings):
+        """Process portrait image with facial feature preservation"""
+        # This is a placeholder - implement your portrait-specific processing
+        return self.process_with_feature_preservation(image, settings, 'portrait')
+    
+    def process_landscape_image(self, image, settings):
+        """Process landscape image with horizon/structure preservation"""
+        # This is a placeholder - implement your landscape-specific processing
+        return self.process_with_feature_preservation(image, settings, 'landscape')
+    
+    def process_still_life_image(self, image, settings):
+        """Process still life image with object boundary preservation"""
+        # This is a placeholder - implement your still life-specific processing
+        return self.process_with_feature_preservation(image, settings, 'still_life')
+    
+    def process_generic_image(self, image, settings):
+        """Process generic image without specialized handling"""
+        # This is a placeholder - implement your generic processing
+        return self.process_with_feature_preservation(image, settings, 'general')
+
+    def _create_basic_result(self, image, settings):
+        """Create a basic result if all other processing fails"""
+        logger = logging.getLogger('pbn-app')
+        logger.info("Using fallback basic processing")
+        
+        # Make a copy of the image
+        processed = image.copy()
+        
+        # Apply basic blur
+        processed = cv2.GaussianBlur(processed, (5, 5), 0)
+        
+        # Simple color quantization
+        num_colors = settings.get('colors', 10)
+        pixels = processed.reshape(-1, 3).astype(np.float32)
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.2)
+        _, labels, centers = cv2.kmeans(pixels, num_colors, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+        
+        # Convert back to 8-bit image
+        centers = np.uint8(centers)
+        segmented_flat = centers[labels.flatten()]
+        segmented = segmented_flat.reshape(image.shape)
+        
+        # Create a basic preview
+        preview = segmented.copy()
+        
+        # Return the result
+        result = {
+            'processed_image': processed,
+            'segmented_image': segmented,
+            'preview_image': preview,
+            'colors': [{'rgb': [int(c[0]), int(c[1]), int(c[2])], 'count': int(np.sum(labels == i))} for i, c in enumerate(centers)],
+            'paintability': 50,  # Default value for fallback processing
+        }
+        
+        logger.info(f"Basic fallback processing complete with {num_colors} colors")
+        return result
+
+    def _optimize_colors_for_pet_features(self, image, colors, eye_regions):
+        """Ensure eyes get appropriate colors"""
+        new_colors = colors.copy()
+        
+        # Extract eye region colors
+        eye_colors = []
+        for (x, y, w, h) in eye_regions:
+            eye_area = image[y:y+h, x:x+w]
+            if eye_area.size > 0:
+                # Get average color of eye region
+                avg_color = np.mean(eye_area.reshape(-1, 3), axis=0)
+                eye_colors.append(avg_color)
+        
+        # Make sure at least one eye color is in the palette
+        if eye_colors:
+            replaced = False
+            for eye_color in eye_colors:
+                # Find similar color in palette
+                distances = [np.sum((c - eye_color)**2) for c in new_colors]
+                min_dist_idx = np.argmin(distances)
+                
+                # If no similar color exists, replace least used color
+                if distances[min_dist_idx] > 1000:  # Threshold for similarity
+                    new_colors[min_dist_idx] = eye_color
+                    replaced = True
+                    
+            if not replaced:
+                # Ensure eye color is distinct enough
+                idx = np.argmin(distances)
+                new_colors[idx] = eye_colors[0]
+        
+        return new_colors

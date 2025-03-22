@@ -83,18 +83,18 @@ class SettingsManager:
                     'feature_detail_boost': 1.5
                 },
                 'medium': {
-                    'num_colors': 12,
-                    'simplification_level': 'medium',
-                    'edge_strength': 0.7,
+                    'num_colors': 16,            # Increased from 12
+                    'simplification_level': 'low', # Changed from medium
+                    'edge_strength': 0.6,        # Reduced from 0.7
                     'edge_width': 1,
                     'enhance_dark_areas': True,
-                    'dark_threshold': 60,
-                    'edge_style': 'soft',
-                    'merge_regions_level': 'aggressive',
-                    'min_region_percent': 0.7,
-                    'color_similarity_threshold': 50,
+                    'dark_threshold': 70,        # Increased from 60
+                    'edge_style': 'thin',        # Changed from soft
+                    'merge_regions_level': 'low', # Changed from aggressive
+                    'min_region_percent': 0.5,   # Reduced from 0.7
+                    'color_similarity_threshold': 40, # Reduced from 50
                     'preserve_features': True,
-                    'feature_detail_boost': 1.8
+                    'feature_detail_boost': 2.5  # Increased from 1.8
                 },
                 'high': {
                     'num_colors': 15,
