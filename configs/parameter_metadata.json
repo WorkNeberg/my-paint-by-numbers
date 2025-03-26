@@ -1,0 +1,405 @@
+{
+  "categories": {
+    "basic": {
+      "name": "Basic Settings",
+      "description": "Core settings that affect the overall result",
+      "order": 1
+    },
+    "preprocessing": {
+      "name": "Preprocessing",
+      "description": "Settings that affect how the image is processed before segmentation",
+      "order": 2
+    },
+    "feature_detection": {
+      "name": "Feature Detection",
+      "description": "Settings related to detecting and preserving important image features",
+      "order": 3
+    },
+    "color_control": {
+      "name": "Color Control",
+      "description": "Settings that affect color selection and processing",
+      "order": 4
+    },
+    "number_placement": {
+      "name": "Number Placement",
+      "description": "Settings that control how numbers are placed in regions",
+      "order": 5
+    }
+  },
+  "parameters": {
+    "colors": {
+      "name": "Number of Colors",
+      "description": "The number of distinct colors to use in the paint-by-numbers template",
+      "long_description": "This setting controls how many different colors will be in the final template. More colors generally means more detail but also makes the template more complex to paint.",
+      "category": "basic",
+      "ui_control": "slider",
+      "visual_impact": 5,
+      "processing_impact": 3,
+      "complexity_impact": 5,
+      "examples": {
+        "low": "5-10 colors: Simple, impressionist style with less detail",
+        "medium": "15-20 colors: Balanced detail and complexity",
+        "high": "25-30 colors: High detail, more complex to paint"
+      }
+    },
+    "edge_strength": {
+      "name": "Edge Strength",
+      "description": "How strongly edges are detected and preserved",
+      "long_description": "Controls the sensitivity of edge detection. Higher values make edges more prominent, while lower values create softer transitions between regions.",
+      "category": "basic",
+      "ui_control": "slider",
+      "visual_impact": 4,
+      "processing_impact": 2,
+      "complexity_impact": 3
+    },
+    "edge_width": {
+      "name": "Edge Width",
+      "description": "Width of edges in pixels",
+      "long_description": "Determines how thick the edges appear in the template. Thicker edges are easier to see but may obscure small details.",
+      "category": "basic",
+      "ui_control": "slider",
+      "visual_impact": 3,
+      "processing_impact": 1,
+      "complexity_impact": 2
+    },
+    "simplification_level": {
+      "name": "Simplification Level",
+      "description": "How much to simplify the image",
+      "long_description": "Controls the level of detail in the template. Higher values create fewer, larger regions that are easier to paint but have less detail.",
+      "category": "basic",
+      "ui_control": "dropdown",
+      "visual_impact": 5,
+      "processing_impact": 4,
+      "complexity_impact": 5,
+      "options": {
+        "low": "High Detail - Preserves more intricate features",
+        "medium": "Medium Detail - Balanced approach",
+        "high": "Low Detail - Simplifies the image significantly",
+        "very_high": "Minimal Detail - Maximum simplification"
+      }
+    },
+    "edge_style": {
+      "name": "Edge Style",
+      "description": "Style of edges in the template",
+      "long_description": "Controls how edges appear in the final template. Different styles provide different aesthetic looks and can affect how easy it is to see region boundaries.",
+      "category": "basic",
+      "ui_control": "dropdown",
+      "visual_impact": 4,
+      "processing_impact": 1,
+      "complexity_impact": 2,
+      "options": {
+        "standard": "Standard - Regular black outlines",
+        "soft": "Soft - Gentler gray outlines",
+        "bold": "Bold - Thicker black outlines",
+        "thin": "Thin - Fine lines",
+        "hierarchical": "Hierarchical - Important features get stronger outlines"
+      }
+    },
+    "merge_regions_level": {
+      "name": "Region Merging",
+      "description": "Level of region merging aggressiveness",
+      "long_description": "Controls how aggressively similar regions are merged together. Higher values create fewer, larger regions that are easier to paint but may lose detail.",
+      "category": "basic",
+      "ui_control": "dropdown",
+      "visual_impact": 4,
+      "processing_impact": 3,
+      "complexity_impact": 5,
+      "options": {
+        "low": "Minimal - Keep most regions separate",
+        "normal": "Normal - Balance between detail and simplicity",
+        "aggressive": "Aggressive - Merge many similar regions"
+      }
+    },
+    "preprocessing_mode": {
+      "name": "Preprocessing Mode",
+      "description": "The approach used to prepare the image",
+      "long_description": "Determines how the image is preprocessed before color segmentation. Different modes are optimized for different types of images.",
+      "category": "preprocessing",
+      "ui_control": "dropdown",
+      "visual_impact": 4,
+      "processing_impact": 3,
+      "complexity_impact": 3,
+      "options": {
+        "standard": "Standard processing suitable for most images",
+        "enhanced": "Enhanced processing with better detail preservation",
+        "artistic": "Artistic processing with stylized effects"
+      }
+    },
+    "sharpen_level": {
+      "name": "Sharpening",
+      "description": "How much to sharpen the image",
+      "long_description": "Controls the amount of sharpening applied to enhance edges and details. Higher values make details more prominent but may introduce noise.",
+      "category": "preprocessing",
+      "ui_control": "slider",
+      "visual_impact": 3,
+      "processing_impact": 2,
+      "complexity_impact": 2
+    },
+    "contrast_boost": {
+      "name": "Contrast Enhancement",
+      "description": "How much to enhance image contrast",
+      "long_description": "Increases the contrast between light and dark areas. Higher values create more distinct regions but may lose subtle details in shadows and highlights.",
+      "category": "preprocessing",
+      "ui_control": "slider",
+      "visual_impact": 4,
+      "processing_impact": 2,
+      "complexity_impact": 3
+    },
+    "noise_reduction_level": {
+      "name": "Noise Reduction",
+      "description": "How much to reduce image noise",
+      "long_description": "Smooths out noise and grain in the image. Higher values create cleaner results but may lose fine texture details.",
+      "category": "preprocessing",
+      "ui_control": "slider",
+      "visual_impact": 3,
+      "processing_impact": 2,
+      "complexity_impact": -2
+    },
+    "detail_preservation": {
+      "name": "Detail Preservation",
+      "description": "How much to preserve fine details",
+      "long_description": "Controls how much effort is made to preserve small details during processing. Higher values maintain more details but may result in more complex regions.",
+      "category": "preprocessing",
+      "ui_control": "dropdown",
+      "visual_impact": 4,
+      "processing_impact": 3,
+      "complexity_impact": 4,
+      "options": {
+        "low": "Low - Simplify away most small details",
+        "medium": "Medium - Balanced approach",
+        "high": "High - Preserve most details",
+        "very_high": "Very High - Maximum detail preservation"
+      }
+    },
+    "feature_detection_enabled": {
+      "name": "Feature Detection",
+      "description": "Enable/disable intelligent feature detection",
+      "long_description": "When enabled, the system will identify and specially handle important features like eyes, faces, and other significant elements.",
+      "category": "feature_detection",
+      "ui_control": "checkbox",
+      "visual_impact": 5,
+      "processing_impact": 4,
+      "complexity_impact": 0,
+      "recommended": true
+    },
+    "eye_detection_sensitivity": {
+      "name": "Eye Detection Sensitivity",
+      "description": "How sensitive the eye detection should be",
+      "long_description": "Controls how aggressively the system looks for and protects eye regions. Higher sensitivity ensures eyes are preserved but may incorrectly identify non-eye regions.",
+      "category": "feature_detection",
+      "ui_control": "dropdown",
+      "visual_impact": 4,
+      "processing_impact": 2,
+      "complexity_impact": 1,
+      "depends_on": "feature_detection_enabled",
+      "options": {
+        "low": "Low - Minimal eye detection",
+        "medium": "Medium - Balanced detection",
+        "high": "High - Aggressive eye detection"
+      }
+    },
+    "face_detection_mode": {
+      "name": "Face Detection Mode",
+      "description": "Method used for face detection",
+      "long_description": "Determines the algorithm used for detecting faces in the image. More advanced modes are better at finding faces but use more processing power.",
+      "category": "feature_detection",
+      "ui_control": "dropdown",
+      "visual_impact": 4,
+      "processing_impact": 4,
+      "complexity_impact": 1,
+      "depends_on": "feature_detection_enabled",
+      "options": {
+        "basic": "Basic - Fast but less accurate",
+        "enhanced": "Enhanced - Better but slower",
+        "ML": "Machine Learning - Most accurate but resource intensive"
+      }
+    },
+    "feature_importance": {
+      "name": "Feature Importance",
+      "description": "How much weight to give to detected features",
+      "long_description": "Controls how strongly detected features influence the final template. Higher values preserve features better but may override other optimization goals.",
+      "category": "feature_detection",
+      "ui_control": "slider",
+      "visual_impact": 4,
+      "processing_impact": 2,
+      "complexity_impact": 2,
+      "depends_on": "feature_detection_enabled"
+    },
+    "preserve_expressions": {
+      "name": "Preserve Expressions",
+      "description": "Whether to preserve facial expressions",
+      "long_description": "When enabled, the system will try to preserve facial expressions such as smiles, frowns, etc. by keeping more detail in those areas.",
+      "category": "feature_detection",
+      "ui_control": "checkbox",
+      "visual_impact": 3,
+      "processing_impact": 2,
+      "complexity_impact": 2,
+      "depends_on": "feature_detection_enabled"
+    },
+    "feature_protection_radius": {
+      "name": "Feature Protection Area",
+      "description": "Size of the protected area around features",
+      "long_description": "Controls how large an area around detected features is protected from simplification. Larger values preserve more of the surrounding context.",
+      "category": "feature_detection",
+      "ui_control": "slider",
+      "visual_impact": 3,
+      "processing_impact": 1,
+      "complexity_impact": 2,
+      "depends_on": "feature_detection_enabled"
+    },
+    "color_harmony": {
+      "name": "Color Harmony",
+      "description": "Type of color harmony to apply",
+      "long_description": "Controls how colors relate to each other. Different harmony types create different aesthetic feels while maintaining the essence of the original image.",
+      "category": "color_control",
+      "ui_control": "dropdown",
+      "visual_impact": 5,
+      "processing_impact": 3,
+      "complexity_impact": 0,
+      "options": {
+        "none": "None - Use colors directly from the image",
+        "complementary": "Complementary - Colors from opposite sides of the color wheel",
+        "analogous": "Analogous - Colors next to each other on the color wheel",
+        "triadic": "Triadic - Colors evenly spaced around the color wheel",
+        "monochromatic": "Monochromatic - Variations of a single color"
+      }
+    },
+    "color_saturation_boost": {
+      "name": "Color Saturation",
+      "description": "Adjustment to color saturation",
+      "long_description": "Increases or decreases the intensity of colors. Positive values make colors more vibrant, negative values make them more muted.",
+      "category": "color_control",
+      "ui_control": "slider",
+      "visual_impact": 4,
+      "processing_impact": 1,
+      "complexity_impact": 0
+    },
+    "dark_area_enhancement": {
+      "name": "Dark Area Enhancement",
+      "description": "How much to enhance details in dark areas",
+      "long_description": "Controls detail preservation in shadows and dark regions. Higher values bring out more details in dark areas at the risk of looking unnatural.",
+      "category": "color_control",
+      "ui_control": "slider",
+      "visual_impact": 3,
+      "processing_impact": 2,
+      "complexity_impact": 2
+    },
+    "light_area_protection": {
+      "name": "Light Area Protection",
+      "description": "How much to protect details in bright areas",
+      "long_description": "Controls how aggressively highlights and bright areas are protected from washing out. Higher values preserve more highlight details.",
+      "category": "color_control",
+      "ui_control": "slider",
+      "visual_impact": 3,
+      "processing_impact": 1,
+      "complexity_impact": 1
+    },
+    "color_grouping_threshold": {
+      "name": "Color Grouping Threshold",
+      "description": "Threshold for grouping similar colors",
+      "long_description": "Controls how aggressively similar colors are grouped together. Higher values result in fewer distinct colors, which can simplify painting.",
+      "category": "color_control",
+      "ui_control": "slider",
+      "visual_impact": 4,
+      "processing_impact": 2,
+      "complexity_impact": 4
+    },
+    "highlight_preservation": {
+      "name": "Highlight Preservation",
+      "description": "How well to preserve bright highlights",
+      "long_description": "Controls the preservation of bright highlights like reflections, light sources, and bright details. Higher values keep these features more distinct.",
+      "category": "color_control",
+      "ui_control": "dropdown",
+      "visual_impact": 3,
+      "processing_impact": 2,
+      "complexity_impact": 2,
+      "options": {
+        "low": "Low - Simplify highlights",
+        "medium": "Medium - Balanced approach",
+        "high": "High - Preserve most highlights",
+        "very_high": "Very High - Maximum highlight preservation"
+      }
+    },
+    "number_size_strategy": {
+      "name": "Number Size Strategy",
+      "description": "How to determine number sizes in regions",
+      "long_description": "Controls how the size of region numbers is determined. Different strategies optimize for different goals like readability or aesthetics.",
+      "category": "number_placement",
+      "ui_control": "dropdown",
+      "visual_impact": 3,
+      "processing_impact": 1,
+      "complexity_impact": 2,
+      "options": {
+        "uniform": "Uniform - All numbers the same size",
+        "proportional": "Proportional - Size based on region area",
+        "adaptive": "Adaptive - Size optimized for each region"
+      }
+    },
+    "number_placement": {
+      "name": "Number Placement",
+      "description": "Strategy for placing numbers in regions",
+      "long_description": "Controls where numbers are placed within regions. Different strategies balance readability, aesthetics, and avoiding important features.",
+      "category": "number_placement",
+      "ui_control": "dropdown",
+      "visual_impact": 3,
+      "processing_impact": 1,
+      "complexity_impact": 0,
+      "options": {
+        "center": "Center - Place numbers in region centers",
+        "weighted": "Weighted - Place in the widest part of regions",
+        "avoid_features": "Feature-Aware - Avoid placing over important features"
+      }
+    },
+    "number_contrast": {
+      "name": "Number Contrast",
+      "description": "Contrast level for region numbers",
+      "long_description": "Controls how strongly the numbers stand out from the background. Higher contrast makes numbers more readable but can be visually distracting.",
+      "category": "number_placement",
+      "ui_control": "dropdown",
+      "visual_impact": 3,
+      "processing_impact": 1,
+      "complexity_impact": 0,
+      "options": {
+        "low": "Low - Subtle numbers",
+        "medium": "Medium - Balanced visibility",
+        "high": "High - Highly visible numbers",
+        "very_high": "Very High - Maximum visibility"
+      }
+    },
+    "number_legibility_priority": {
+      "name": "Number Legibility Priority",
+      "description": "Priority given to number readability",
+      "long_description": "Controls the balance between number readability and aesthetic concerns. Higher values favor clearer numbers, possibly at the expense of visual appearance.",
+      "category": "number_placement",
+      "ui_control": "slider",
+      "visual_impact": 2,
+      "processing_impact": 1,
+      "complexity_impact": 0
+    },
+    "min_number_size": {
+      "name": "Minimum Number Size",
+      "description": "Smallest allowed font size for numbers",
+      "long_description": "Sets the minimum size for region numbers. Larger minimums ensure readability but may cause crowding in small regions.",
+      "category": "number_placement",
+      "ui_control": "slider",
+      "visual_impact": 2,
+      "processing_impact": 1,
+      "complexity_impact": 1
+    },
+    "number_overlap_strategy": {
+      "name": "Number Overlap Strategy",
+      "description": "How to handle potential number overlaps",
+      "long_description": "Controls what happens when numbers would overlap with each other. Different strategies prioritize different aspects of the template.",
+      "category": "number_placement",
+      "ui_control": "dropdown",
+      "visual_impact": 2,
+      "processing_impact": 1,
+      "complexity_impact": 0,
+      "options": {
+        "shrink": "Shrink - Make numbers smaller to fit",
+        "move": "Move - Adjust positions to avoid overlap",
+        "prioritize": "Prioritize - Show some numbers more prominently"
+      }
+    }
+  }
+}

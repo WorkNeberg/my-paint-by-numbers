@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paint by Numbers Editor</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/enhanced.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Paint by Numbers Editor</h1>
+            <p>Customize your template with advanced settings</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <div id="message-container"></div>
+        
+        <div class="editor-container">
+            <!-- Parameter sidebar -->
+            <div class="sidebar">
+                <div class="preset-panel card">
+                    <h3>Settings</h3>
+                    <div class="preset-selector">
+                        <select id="preset-selector">
+                            <option value="">-- Select a preset --</option>
+                            {% for preset in presets %}
+                            <option value="{{ preset.name }}">{{ preset.name }}</option><div class="tab-container">
+                            {% endfor %}
+                        </select>
+                        <button id="load-preset-btn" class="btn">Load</button>
+                    </div>
+                    
+                    <div class="toggle-controls">
+                        <div class="toggle-button active" data-mode="basic">Basic</div>
+                        <div class="toggle-button" data-mode="advanced">Advanced</div>
+                    </div>
+                    
+                    <div id="image-type-selector" class="form-group">
+                        <label for="image-type">Image Type:</label>
+                        <select id="image-type">
+                            <option value="auto">Auto Detect</option>
+                            <option value="portrait">Portrait</option>
+                            <option value="pet">Pet</option>
+                            <option value="landscape">Landscape</option>
+                            <option value="still_life">Still Life</option>
+                            <option value="generic">Generic</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button id="analyze-btn" class="btn">Analyze Settings</button>
+                        <button id="process-btn" class="btn btn-primary">Process Image</button>
+                        <button id="show-all-previews-btn" class="btn btn-secondary">Show All Previews</button>
+                    </div>
+                </div>
+                
+                <div id="parameter-container">
+                    <!-- Parameters will be dynamically generated -->
+                </div>
+                
+                <div class="save-preset-panel card">
+                    <h3>Save Current Settings</h3>
+                    <div class="form-group">
+                        <label for="preset-name">Preset Name:</label>
+                        <input type="text" id="preset-name" placeholder="My Custom Settings">
+                    </div>
+                    <div class="form-group">
+                        <label for="preset-description">Description:</label>
+                        <textarea id="preset-description" placeholder="Describe your preset settings"></textarea>
+                    </div>
+                    <button id="save-preset-btn" class="btn">Save Preset</button>
+                </div>
+            </div>
+            
+            <!-- Preview area -->
+            <div class="preview-area">
+                <div class="preview-panel">
+                    <div class="preview-image-container">
+                        <img id="uploaded-image" src="/uploads/{{ image.filename }}" 
+                             class="preview-image" alt="Original Image">
+                    </div>
+                </div>
+                
+                <div id="analysis-panel" class="card hidden">
+                    <h3>Settings Analysis</h3>
+                    <div id="analysis-content"></div>
+                </div>
+            </div>
+
+            <!-- Add this container for preview grid -->
+            <div id="preview-grid-container" class="hidden"></div>
+
+            <!-- Add this loading indicator -->
+            <div id="processing-indicator" class="loading hidden">
+                <div class="spinner"></div>
+                <p>Processing image, please wait...</p>
+            </div>
+        </div>
+        
+        <div id="loading" class="hidden">
+            <div class="spinner"></div>
+            <p>Processing image. Please wait...</p>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Paint by Numbers Generator</p>
+        </div>
+    </footer>
+
+    <!-- Template for parameter groups -->
+    <template id="parameter-group-template">
+        <div class="parameter-group" data-category="">
+            <h3></h3>
+            <div class="parameters"></div>
+        </div>
+    </template>
+    
+    <!-- Template for individual parameter -->
+    <template id="parameter-template">
+        <div class="parameter" data-param-name="">
+            <div class="parameter-title"></div>
+            <div class="parameter-description"></div>
+            <div class="parameter-control"></div>
+        </div>
+    </template>
+
+    <script src="/static/js/enhanced-editor.js"></script>
+</body>
+</html>

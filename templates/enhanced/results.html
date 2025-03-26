@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paint by Numbers Results</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/enhanced.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Your Paint by Numbers Template</h1>
+            <p>Processing completed successfully</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card">
+            <h2>Final Results</h2>
+            <p>Processing completed in {{ results.processing_time|round(2) }} seconds</p>
+            
+            <div class="results-tabs">
+                <div class="results-tab active" data-result="template_with_numbers">Template with Numbers</div>
+                <div class="results-tab" data-result="template">Template without Numbers</div>
+                <div class="results-tab" data-result="edges">Edges</div>
+                <div class="results-tab" data-result="segments">Segments</div>
+                <div class="results-tab" data-result="preprocessed">Preprocessed</div>
+                <div class="results-tab" data-result="original">Original</div>
+            </div>
+            
+            <div class="results-image-container">
+                <img id="result-image" src="{{ results.files.template_with_numbers }}" 
+                     alt="Generated template" class="results-image">
+            </div>
+            
+            <div class="download-section">
+                <h3>Download Options</h3>
+                <div class="download-buttons">
+                    <a href="{{ results.files.template_with_numbers }}" download class="download-button">
+                        <span class="icon">📄</span>
+                        Download Template with Numbers
+                    </a>
+                    <a href="{{ results.files.template }}" download class="download-button">
+                        <span class="icon">📄</span>
+                        Download Template without Numbers
+                    </a>
+                </div>
+            </div>
+        </section>
+        
+        <div class="actions-panel">
+            <a href="/enhanced/editor" class="btn btn-secondary">Back to Editor</a>
+            <a href="/enhanced" class="btn">Process New Image</a>
+        </div>
+        
+        <div class="back-container">
+            <a href="/enhanced/editor" class="btn btn-secondary">Back to Editor</a>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Paint by Numbers Generator</p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Setup result tab switching
+            const resultImage = document.getElementById('result-image');
+            const resultTabs = document.querySelectorAll('.results-tab');
+            
+            resultTabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // Update active tab
+                    resultTabs.forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Update image based on tab type
+                    const resultType = this.dataset.result;
+                    
+                    if (resultType === 'template') {
+                        resultImage.src = "{{ results.files.template }}";
+                    } else if (resultType === 'edges') {
+                        resultImage.src = "/static/previews/preview_{{ results.timestamp }}_edges.jpg";
+                    } else if (resultType === 'segments') {
+                        resultImage.src = "/static/previews/preview_{{ results.timestamp }}_segments.jpg";
+                    } else if (resultType === 'preprocessed') {
+                        resultImage.src = "/static/previews/preview_{{ results.timestamp }}_preprocessed.jpg";
+                    } else if (resultType === 'original') {
+                        resultImage.src = "/uploads/{{ results.timestamp }}_FELV-cat.jpg";
+                    } else {
+                        resultImage.src = "{{ results.files.template_with_numbers }}";
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

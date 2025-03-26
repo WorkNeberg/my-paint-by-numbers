@@ -1,0 +1,325 @@
+{
+  "base": {
+    "colors": 15,
+    "edge_strength": 1.0,
+    "edge_width": 1,
+    "simplification_level": "medium",
+    "edge_style": "standard",
+    "merge_regions_level": "normal",
+    
+    "preprocessing": {
+      "preprocessing_mode": "standard",
+      "sharpen_level": 0.5,
+      "contrast_boost": 0.0,
+      "noise_reduction_level": 0.3,
+      "detail_preservation": "medium"
+    },
+    
+    "feature_detection": {
+      "feature_detection_enabled": true,
+      "eye_detection_sensitivity": "medium",
+      "face_detection_mode": "basic",
+      "feature_importance": 1.0,
+      "preserve_expressions": true,
+      "feature_protection_radius": 5
+    },
+    
+    "color_control": {
+      "color_harmony": "none",
+      "color_saturation_boost": 0.0,
+      "dark_area_enhancement": 0.5,
+      "light_area_protection": 0.5,
+      "color_grouping_threshold": 0.5,
+      "highlight_preservation": "medium"
+    },
+    
+    "number_placement": {
+      "number_size_strategy": "uniform",
+      "number_placement": "center",
+      "number_contrast": "medium",
+      "number_legibility_priority": 0.5,
+      "min_number_size": 10,
+      "number_overlap_strategy": "shrink"
+    }
+  },
+  
+  "image_types": {
+    "pet": {
+      "base": {
+        "colors": 9,
+        "edge_strength": 1.5,
+        "edge_width": 2,
+        "simplification_level": "high",
+        "edge_style": "hierarchical",
+        "merge_regions_level": "aggressive",
+        
+        "preprocessing": {
+          "preprocessing_mode": "enhanced",
+          "sharpen_level": 0.8,
+          "contrast_boost": 0.3,
+          "noise_reduction_level": 0.4,
+          "detail_preservation": "high"
+        },
+        
+        "feature_detection": {
+          "feature_detection_enabled": true,
+          "eye_detection_sensitivity": "high",
+          "face_detection_mode": "enhanced",
+          "feature_importance": 1.5,
+          "preserve_expressions": true,
+          "feature_protection_radius": 8
+        },
+        
+        "color_control": {
+          "color_harmony": "none",
+          "color_saturation_boost": 0.2,
+          "dark_area_enhancement": 1.0,
+          "light_area_protection": 0.7,
+          "color_grouping_threshold": 0.6,
+          "highlight_preservation": "high"
+        },
+        
+        "number_placement": {
+          "number_size_strategy": "adaptive",
+          "number_placement": "avoid_features",
+          "number_contrast": "high",
+          "number_legibility_priority": 0.7,
+          "min_number_size": 10,
+          "number_overlap_strategy": "move"
+        }
+      },
+      
+      "variants": {
+        "standard": {
+          "description": "Balanced settings for most pet images",
+          "colors": 9
+        },
+        "detailed": {
+          "description": "Higher detail preservation for complex pets",
+          "colors": 12,
+          "simplification_level": "medium",
+          "preprocessing": {
+            "sharpen_level": 1.2,
+            "detail_preservation": "very_high"
+          },
+          "feature_detection": {
+            "feature_importance": 1.8
+          },
+          "color_control": {
+            "highlight_preservation": "very_high"
+          }
+        },
+        "simplified": {
+          "description": "Maximum simplification for easy painting",
+          "colors": 7,
+          "simplification_level": "very_high",
+          "edge_strength": 2.0,
+          "edge_width": 3,
+          "preprocessing": {
+            "preprocessing_mode": "standard",
+            "sharpen_level": 0.3,
+            "contrast_boost": 0.5
+          },
+          "feature_detection": {
+            "feature_importance": 1.2
+          },
+          "number_placement": {
+            "number_size_strategy": "uniform",
+            "number_contrast": "very_high"
+          }
+        }
+      },
+      "recommended": "simplified"
+    },
+    
+    "portrait": {
+      "base": {
+        "colors": 15,
+        "edge_strength": 1.2,
+        "simplification_level": "medium",
+        
+        "preprocessing": {
+          "preprocessing_mode": "enhanced",
+          "sharpen_level": 0.6,
+          "contrast_boost": 0.2,
+          "noise_reduction_level": 0.5,
+          "detail_preservation": "high"
+        },
+        
+        "feature_detection": {
+          "feature_detection_enabled": true,
+          "eye_detection_sensitivity": "high",
+          "face_detection_mode": "ML",
+          "feature_importance": 1.7,
+          "preserve_expressions": true,
+          "feature_protection_radius": 10
+        },
+        
+        "color_control": {
+          "color_harmony": "none",
+          "color_saturation_boost": 0.1,
+          "dark_area_enhancement": 0.8,
+          "light_area_protection": 0.8,
+          "color_grouping_threshold": 0.4,
+          "highlight_preservation": "high"
+        },
+        
+        "number_placement": {
+          "number_size_strategy": "adaptive",
+          "number_placement": "avoid_features",
+          "number_contrast": "high",
+          "number_legibility_priority": 0.8,
+          "min_number_size": 10,
+          "number_overlap_strategy": "move"
+        }
+      },
+      
+      "variants": {
+        "standard": {
+          "description": "Balanced settings for portraits"
+        },
+        "detailed": {
+          "description": "Enhanced facial features",
+          "colors": 20,
+          "simplification_level": "low",
+          "preprocessing": {
+            "sharpen_level": 1.0,
+            "detail_preservation": "very_high"
+          },
+          "feature_detection": {
+            "feature_importance": 2.0,
+            "feature_protection_radius": 15
+          }
+        }
+      },
+      "recommended": "standard"
+    },
+    
+    "landscape": {
+      "base": {
+        "colors": 15,
+        "simplification_level": "medium",
+        
+        "preprocessing": {
+          "preprocessing_mode": "standard",
+          "sharpen_level": 0.7,
+          "contrast_boost": 0.4,
+          "noise_reduction_level": 0.2,
+          "detail_preservation": "medium"
+        },
+        
+        "feature_detection": {
+          "feature_detection_enabled": false,
+          "eye_detection_sensitivity": "low",
+          "face_detection_mode": "basic",
+          "feature_importance": 0.5,
+          "preserve_expressions": false,
+          "feature_protection_radius": 3
+        },
+        
+        "color_control": {
+          "color_harmony": "complementary",
+          "color_saturation_boost": 0.3,
+          "dark_area_enhancement": 0.7,
+          "light_area_protection": 0.9,
+          "color_grouping_threshold": 0.6,
+          "highlight_preservation": "high"
+        },
+        
+        "number_placement": {
+          "number_size_strategy": "proportional",
+          "number_placement": "center",
+          "number_contrast": "medium",
+          "number_legibility_priority": 0.6,
+          "min_number_size": 9,
+          "number_overlap_strategy": "shrink"
+        }
+      },
+      
+      "variants": {
+        "standard": {
+          "description": "Balanced settings for landscapes"
+        },
+        "simplified": {
+          "description": "Reduced complexity for landscapes",
+          "colors": 10,
+          "simplification_level": "high",
+          "preprocessing": {
+            "contrast_boost": 0.6
+          },
+          "color_control": {
+            "color_harmony": "analogous",
+            "color_saturation_boost": 0.5
+          }
+        }
+      },
+      "recommended": "standard"
+    }
+  },
+  
+  "variant_styles": {
+    "cartoon": {
+      "description": "Simplified cartoon-style outlines",
+      "colors": 8,
+      "edge_style": "bold",
+      "edge_width": 3,
+      "simplification_level": "high",
+      "merge_regions_level": "aggressive",
+      "preprocessing": {
+        "preprocessing_mode": "artistic",
+        "contrast_boost": 0.8,
+        "sharpen_level": 0.3
+      },
+      "color_control": {
+        "color_harmony": "complementary",
+        "color_saturation_boost": 0.7
+      }
+    },
+    "artistic": {
+      "description": "More detailed artistic rendering",
+      "colors": "+5",
+      "edge_style": "soft",
+      "preprocessing": {
+        "preprocessing_mode": "artistic",
+        "detail_preservation": "very_high"
+      },
+      "color_control": {
+        "color_harmony": "complementary",
+        "color_saturation_boost": 0.3
+      }
+    },
+    "easy": {
+      "description": "Extra easy to paint version",
+      "colors": "-4",
+      "simplification_level": "very_high",
+      "merge_regions_level": "aggressive",
+      "preprocessing": {
+        "contrast_boost": 0.6,
+        "detail_preservation": "low" 
+      },
+      "number_placement": {
+        "number_size_strategy": "uniform",
+        "number_contrast": "very_high",
+        "min_number_size": 12
+      }
+    },
+    "vintage": {
+      "description": "Classic retro style with muted colors",
+      "edge_style": "soft",
+      "color_control": {
+        "color_harmony": "monochromatic",
+        "color_saturation_boost": -0.3
+      }
+    },
+    "modern": {
+      "description": "Contemporary style with bold contrasts",
+      "edge_style": "bold",
+      "edge_width": 2,
+      "color_control": {
+        "color_harmony": "triadic",
+        "color_saturation_boost": 0.5,
+        "color_grouping_threshold": 0.7
+      }
+    }
+  }
+}

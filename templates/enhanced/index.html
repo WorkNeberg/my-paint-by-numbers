@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Paint by Numbers Generator</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/enhanced.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Enhanced Paint by Numbers Generator</h1>
+            <p>Create highly customizable paint-by-numbers templates</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card">
+            <h2>Upload an Image</h2>
+            <form id="upload-form" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="image">Select an image to convert:</label>
+                    <input type="file" id="image" name="image" accept=".jpg,.jpeg,.png,.webp">
+                </div>
+                
+                <div id="preview-container" class="hidden">
+                    <h3>Image Preview</h3>
+                    <div class="image-preview-wrapper">
+                        <img id="image-preview" src="" alt="Image preview">
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Upload & Continue</button>
+                </div>
+            </form>
+        </section>
+
+        <div id="loading" class="hidden">
+            <div class="spinner"></div>
+            <p>Uploading image. Please wait...</p>
+        </div>
+        
+        <div id="error-message" class="hidden alert alert-error">
+            <p>Error message appears here</p>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Enhanced Paint by Numbers Generator</p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('upload-form');
+            const imageInput = document.getElementById('image');
+            const imagePreview = document.getElementById('image-preview');
+            const previewContainer = document.getElementById('preview-container');
+            const loadingIndicator = document.getElementById('loading');
+            const errorMessage = document.getElementById('error-message');
+            
+            // Preview image when selected
+            imageInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        imagePreview.src = e.target.result;
+                        previewContainer.classList.remove('hidden');
+                    };
+                    reader.readAsDataURL(this.files[0]);
+                }
+            });
+            
+            // Handle form submission with AJAX
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Validate selection
+                if (!imageInput.files || !imageInput.files[0]) {
+                    showError('Please select an image file');
+                    return;
+                }
+                
+                // Show loading indicator
+                loadingIndicator.classList.remove('hidden');
+                errorMessage.classList.add('hidden');
+                
+                // Create form data
+                const formData = new FormData();
+                formData.append('image', imageInput.files[0]);
+                
+                // Send AJAX request
+                fetch('/enhanced/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    loadingIndicator.classList.add('hidden');
+                    
+                    if (data.success) {
+                        // Redirect to editor
+                        window.location.href = '/enhanced/editor';
+                    } else {
+                        showError(data.error || 'Error uploading image');
+                    }
+                })
+                .catch(error => {
+                    loadingIndicator.classList.add('hidden');
+                    showError('Error uploading image: ' + error.message);
+                });
+            });
+            
+            function showError(message) {
+                errorMessage.querySelector('p').textContent = message;
+                errorMessage.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -548,3 +548,20 @@ class FeatureDetector:
             
             # Default to generic type
             return "generic"
+    
+    def detect_features(self, image, settings):
+        """
+        Detect important features in the image based on settings
+        Currently a stub implementation to prevent pipeline errors
+        """
+        logger = logging.getLogger('pbn-app.feature_detector')
+        logger.warning("Using fallback feature detection - full implementation pending")
+        
+        # Return minimal structure to allow pipeline to continue
+        return {
+            'features_detected': False,
+            'feature_mask': None,
+            'face_regions': [],
+            'eye_regions': [],
+            'feature_importance_map': np.zeros_like(image[:,:,0]) if len(image.shape) == 3 else np.zeros_like(image)
+        }

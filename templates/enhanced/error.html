@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error {{ error_code }}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/enhanced.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Error {{ error_code }}</h1>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="card">
+            <h2>{{ error_message }}</h2>
+            <p>Something went wrong. Please try again or go back to the home page.</p>
+            <a href="/" class="btn btn-primary">Go to Home Page</a>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Paint by Numbers Generator</p>
+        </div>
+    </footer>
+</body>
+</html>
