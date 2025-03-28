@@ -41,8 +41,8 @@ def serve_upload(filename):
 @app.route('/static/previews/<path:filename>')
 def serve_preview(filename):
     """Serve files from the previews directory"""
-    preview_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'preview')
-    return send_from_directory(preview_folder, filename)
+    preview_dir = os.path.join(app.static_folder, 'previews')
+    return send_from_directory(preview_dir, filename)
 
 # Add this route to serve files from the output directory
 

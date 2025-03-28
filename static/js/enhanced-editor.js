@@ -27,8 +27,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set up event handlers
     setupEventHandlers();
     
-    // Add preview button
-    addPreviewButton();
+ 
+    
 });
 
 // Cache frequently used DOM elements
@@ -55,33 +55,122 @@ function cacheElements() {
 // Set up event handlers
 function setupEventHandlers() {
     // Preview tab switching
-    elements.previewTabs.forEach(tab => {
-        tab.addEventListener('click', handlePreviewTabClick);
-    });
+    if (elements.previewTabs) {
+        elements.previewTabs.forEach(tab => {
+            tab.addEventListener('click', handlePreviewTabClick);
+        });
+    }
     
     // Update preview button
-    elements.updatePreviewBtn.addEventListener('click', handleUpdatePreview);
-    
- 
+    if (elements.updatePreviewBtn) {
+        elements.updatePreviewBtn.addEventListener('click', handleUpdatePreview);
+    }
     
     // Analyze settings button
-    elements.analyzeBtn.addEventListener('click', handleAnalyzeSettings);
+    if (elements.analyzeBtn) {
+        elements.analyzeBtn.addEventListener('click', handleAnalyzeSettings);
+    }
     
     // Load preset button
-    elements.loadPresetBtn.addEventListener('click', handleLoadPreset);
+    if (elements.loadPresetBtn) {
+        elements.loadPresetBtn.addEventListener('click', function() {
+            // Get selected preset name from dropdown
+            const presetName = elements.presetSelector.value;
+            if (presetName) {
+                handleLoadPreset(presetName);
+            } else {
+                alert('Please select a preset to load');
+            }
+        });
+    }
     
     // Save preset button
-    elements.savePresetBtn.addEventListener('click', handleSavePreset);
+    if (elements.savePresetBtn) {
+        elements.savePresetBtn.addEventListener('click', handleSavePreset);
+    }
     
     // Image type selector
-    elements.imageTypeSelector.addEventListener('change', handleImageTypeChange);
+    if (elements.imageTypeSelector) {
+        elements.imageTypeSelector.addEventListener('change', handleImageTypeChange);
+    }
     
     // Mode toggle
-    elements.modeToggle.forEach(button => {
-        button.addEventListener('click', handleModeToggle);
-    });
+    if (elements.modeToggle) {
+        elements.modeToggle.forEach(button => {
+            button.addEventListener('click', handleModeToggle);
+        });
+    }
+    
+    // Process button - Add as a direct selector instead of using the elements object
+    const processBtn = document.getElementById('process-btn');
+    if (processBtn) {
+        processBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log("Process button clicked");
+            
+            // Show loading indicator
+            const loadingIndicator = document.getElementById('processing-indicator');
+            if (loadingIndicator) {
+                loadingIndicator.classList.remove('hidden');
+            }
+            
+            // Collect settings directly from parameters
+            const settings = {};
+            
+            // If state.parameterValues exists, use it
+            if (window.state && state.parameterValues) {
+                Object.assign(settings, state.parameterValues);
+            } else {
+                // Otherwise collect from inputs
+                const inputs = document.querySelectorAll('input[type="range"], input[type="number"], select');
+                inputs.forEach(input => {
+                    if (input.id) {
+                        settings[input.id] = input.value;
+                    }
+                });
+            }
+            
+            // Add parameter to stay on page
+            settings.stay_on_page = true;
+            
+            console.log("Sending settings:", settings);
+            // Before sending request to backend in setupEventHandlers:
+            console.log("Final settings object:", JSON.stringify(settings, null, 2));
+            
+            // Send request to backend
+            fetch('/enhanced/api/process', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(settings)
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Hide loading indicator
+                if (loadingIndicator) {
+                    loadingIndicator.classList.add('hidden');
+                }
+                
+                if (data.success) {
+                    console.log("Processing successful, showing preview grid");
+                    // Show preview grid after processing
+                    displayPreviewGrid();
+                } else {
+                    console.error("Processing failed:", data.error);
+                    alert('Error processing image: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                if (loadingIndicator) {
+                    loadingIndicator.classList.add('hidden');
+                }
+                console.error('Error:', error);
+                alert('An error occurred during processing');
+            });
+        });
+    }
 }
-
 // Initialize the parameter UI
 function initializeParameterUI() {
     // Fetch parameter metadata from the page data
@@ -533,31 +622,42 @@ async function handleAnalyzeSettings() {
 }
 
 // Handle Load Preset button click
-async function handleLoadPreset() {
-    const presetName = elements.presetSelector.value;
-    if (!presetName) return;
+// async function handleLoadPreset() {
+//     const presetName = elements.presetSelector.value;
+//     if (!presetName) return;
     
-    try {
-        // Send load preset request
-        const response = await fetch(`/enhanced/api/presets/load/${encodeURIComponent(presetName)}`);
-        const data = await response.json();
+//     try {
+//         // Send load preset request
+//         const response = await fetch(`/enhanced/api/presets/load/${encodeURIComponent(presetName)}`);
+//         const data = await response.json();
         
-        if (data.success) {
-            // Update parameter values
-            state.parameterValues = data.settings;
+//         if (data.success) {
+//             // Add this line to ensure refreshing values
+//             data.settings.refresh_cache = true;
             
-            // Update UI controls
-            updateUIFromSettings();
+//             // Clear all existing values first
+//             state.parameterValues = {};
             
-            showMessage(`Preset "${presetName}" loaded successfully`, 'success');
-        } else {
-            showMessage(data.error || 'Failed to load preset', 'error');
-        }
-    } catch (error) {
-        console.error('Error loading preset:', error);
-        showMessage('Error loading preset: ' + error.message, 'error');
-    }
-}
+//             // Update parameter values with preset values
+//             state.parameterValues = data.settings;
+            
+//             // Update UI - essential for showing the values
+//             updateUIFromSettings();
+            
+//             // Force update image type dropdown if it exists
+//             if (data.settings["image-type"] && elements.imageTypeSelector) {
+//                 elements.imageTypeSelector.value = data.settings["image-type"];
+//             }
+            
+//             showMessage(`Preset "${presetName}" loaded successfully`, 'success');
+//         } else {
+//             showMessage(data.error || 'Failed to load preset', 'error');
+//         }
+//     } catch (error) {
+//         console.error('Error loading preset:', error);
+//         showMessage('Error loading preset: ' + error.message, 'error');
+//     }
+// }
 
 // Handle Save Preset button click
 async function handleSavePreset() {
@@ -639,10 +739,16 @@ function updateUIFromSettings() {
         if (control.type === 'checkbox') {
             control.checked = Boolean(value);
         } 
+        // For sliders (this ensures numeric types are handled correctly)
         else if (control.type === 'range') {
-            control.value = value;
+            // Force numeric conversion
+            control.value = Number(value);
             const valueDisplay = paramElement.querySelector('.value-display');
             if (valueDisplay) valueDisplay.textContent = value;
+            
+            // Important: Trigger input event to properly update state
+            const event = new Event('input', { bubbles: true });
+            control.dispatchEvent(event);
         }
         else if (control.tagName === 'SELECT') {
             control.value = value;
@@ -686,81 +792,32 @@ function showMessage(message, type = 'info') {
     }, 5000);
 }
 
-// Process image button click handler
-document.addEventListener('DOMContentLoaded', function() {
-    // Find the Process Image button
-    const processBtn = document.getElementById('process-btn');
-    if (processBtn) {
-        processBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            
-            // Show loading indicator
-            const loadingIndicator = document.getElementById('processing-indicator');
-            if (loadingIndicator) {
-                loadingIndicator.classList.remove('hidden');
-            }
-            
-            // Collect form settings
-            const form = document.querySelector('form');
-            const formData = new FormData(form);
-            const settings = {};
-            
-            // Convert form data to JSON
-            formData.forEach((value, key) => {
-                settings[key] = value;
-            });
-            
-            // Add parameter to stay on page
-            settings.stay_on_page = true;
-            
-            // Send request to backend
-            fetch('/enhanced/api/process', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(settings)
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Hide loading indicator
-                if (loadingIndicator) {
-                    loadingIndicator.classList.add('hidden');
-                }
-                
-                if (data.success) {
-                    // Show preview grid after processing
-                    displayPreviewGrid();
-                } else {
-                    alert('Error processing image: ' + (data.error || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                if (loadingIndicator) {
-                    loadingIndicator.classList.add('hidden');
-                }
-                console.error('Error:', error);
-                alert('An error occurred during processing');
-            });
-        });
-    }
-});
 
-// Preview grid display function
 function displayPreviewGrid() {
     // Get timestamp from uploaded image
     const uploadedImg = document.getElementById('uploaded-image');
-    if (!uploadedImg) return;
+    if (!uploadedImg) {
+        console.error("No uploaded image found");
+        return;
+    }
     
     const imgSrc = uploadedImg.src;
-    const parts = imgSrc.split('_');
-    if (parts.length < 2) return;
+    console.log("Image URL:", imgSrc);
     
-    const timestamp = parts[1].split('.')[0];
+    // Extract filename from URL
+    const filename = imgSrc.split('/').pop();
+    console.log("Filename:", filename);
+    
+    // Get timestamp (should be the first part before underscore)
+    const timestamp = filename.split('_')[0];
+    console.log("Timestamp:", timestamp);
     
     // Create or clear grid container
     const container = document.getElementById('preview-grid-container');
-    if (!container) return;
+    if (!container) {
+        console.error("No preview grid container found");
+        return;
+    }
     
     container.innerHTML = '';
     container.classList.remove('hidden');
@@ -814,4 +871,38 @@ function displayPreviewGrid() {
     
     // Scroll to preview section
     container.scrollIntoView({behavior: 'smooth'});
+}
+
+function handleLoadPreset(presetName) {
+    console.log(`Loading preset: ${presetName}`);
+    console.log(`Sending request to: /enhanced/api/presets/load/${encodeURIComponent(presetName)}`);
+    fetch(`/enhanced/api/presets/load/${encodeURIComponent(presetName)}`)
+        .then(response => response.json())
+        .then(data => {
+            console.log("Loaded preset data:", data);
+            
+            if (data.success && data.settings) {
+                // Add this line
+                console.log("Preset settings:", JSON.stringify(data.settings, null, 2));
+                
+                // Make sure refresh_cache is included
+                data.settings.refresh_cache = true;
+                
+                // Update state with preset settings
+                state.parameterValues = Object.assign({}, data.settings);
+                
+                // Update UI from settings
+                updateUIFromSettings();
+                
+                // Verify values were applied
+                console.log("Updated parameter values:", state.parameterValues);
+            } else {
+                console.error("Failed to load preset:", data.error || "Unknown error");
+                alert(`Failed to load preset: ${data.error || "Unknown error"}`);
+            }
+        })
+        .catch(error => {
+            console.error("Error loading preset:", error);
+            alert("Error loading preset");
+        });
 }

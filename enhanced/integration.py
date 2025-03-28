@@ -55,7 +55,7 @@ class EnhancedIntegration:
         
     def generate_preview(self, image_path, settings, preview_type='template'):
         """
-        Generate a preview based on current settings
+        Generate a preview based on current settings with caching to avoid repeated processing
         
         Args:
             image_path: Path to the image file
@@ -78,32 +78,76 @@ class EnhancedIntegration:
         if preview_type == 'original':
             return {'preview': image, 'type': 'original'}
         
-        # Detect image type
-        image_type = self.image_type_detector.detect_image_type(image)
+        # IMPORTANT: Respect user's explicit image type choice
+        user_image_type = settings.get('image-type', 'auto')
         
-        # Get appropriate settings
+        # Only auto-detect if user has chosen 'auto'
+        if user_image_type == 'auto':
+            image_type = self.image_type_detector.detect_image_type(image)
+            logger.info(f"User selected 'auto', detected type: {image_type}")
+        else:
+            logger.info(f"Using user-selected image type: {user_image_type}")
+            image_type = user_image_type
+        
+        # Get appropriate settings with the correct image type
         processed_settings = self.settings_manager.get_settings(image_type, custom_params=settings)
         
-        # Generate appropriate preview
+        # For preprocessed preview, we don't need full processing
         if preview_type == 'preprocessed':
-            # Preprocess only
             preprocessed = self.processor.preprocessor.preprocess(image, processed_settings)
             return {'preview': preprocessed, 'type': 'preprocessed'}
-            
-        elif preview_type == 'segments':
-            # Generate segmentation
+        
+        # Create cache key that captures important settings including the ACTUAL image type used
+        cache_key = f"{image_path}_{image_type}_{settings.get('colors', '0')}_{settings.get('edge_style', 'default')}"
+        
+        # Check if we should refresh cache
+        force_refresh = settings.get('refresh_cache', False)
+        
+        # Initialize cache if needed
+        if not hasattr(self, '_preview_cache'):
+            self._preview_cache = {}
+        
+        # Use cached result if available, otherwise process
+        if not force_refresh and cache_key in self._preview_cache:
+            logger.debug(f"Using cached result for {cache_key}")
+            result = self._preview_cache[cache_key]
+        else:
+            logger.debug(f"Processing new result for {cache_key}")
+            # Process the image once and cache the results
+            # FIXED: Removed the problematic force_type parameter
             result = self.processor.process_image(image_path, processed_settings)
-            return {'preview': result['colored_segments'], 'type': 'segments'}
+            self._preview_cache[cache_key] = result
             
+            # Limit cache size
+            if len(self._preview_cache) > 5:
+                oldest = next(iter(self._preview_cache))
+                del self._preview_cache[oldest]
+        
+        # Return appropriate preview based on request with proper fallbacks
+        if preview_type == 'segments':
+            if 'segments' in result:
+                return {'preview': result['segments'], 'type': 'segments'}
+            elif 'colored_segments' in result:
+                return {'preview': result['colored_segments'], 'type': 'segments'}
+            else:
+                logger.warning(f"No segments found in result! Available keys: {list(result.keys())}")
+                return {'preview': image, 'type': 'segments'}
+                
         elif preview_type == 'edges':
-            # Generate edges
-            result = self.processor.process_image(image_path, processed_settings)
-            return {'preview': result['enhanced_edges'], 'type': 'edges'}
-            
+            if 'edges' in result:
+                return {'preview': result['edges'], 'type': 'edges'}
+            elif 'enhanced_edges' in result:
+                return {'preview': result['enhanced_edges'], 'type': 'edges'}
+            else:
+                logger.warning(f"No edges found in result! Available keys: {list(result.keys())}")
+                return {'preview': image, 'type': 'edges'}
+                
         else:  # Default to template
-            # Generate template
-            result = self.processor.process_image(image_path, processed_settings)
-            return {'preview': result['template'], 'type': 'template'}
+            if 'template' in result:
+                return {'preview': result['template'], 'type': 'template'}
+            else:
+                logger.warning(f"No template found in result! Available keys: {list(result.keys())}")
+                return {'preview': image, 'type': 'template'}
     
     def get_parameter_metadata(self):
         """Get metadata for all parameters"""

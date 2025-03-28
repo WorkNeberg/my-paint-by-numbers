@@ -1,0 +1,19 @@
+{
+    "name": "Kid-Friendly Simple",
+    "description": "Extra large regions for young painters",
+    "tags": ["kids", "beginner", "simple"],
+    "created": "2025-03-26 20:37:00",
+    "settings": {
+      "colors": 6,
+      "edge_strength": 2.0,
+      "edge_style": "bold",
+      "edge_width": 4,
+      "merge_regions_level": "aggressive",
+      "simplification_level": "very_high",
+      "contrast_boost": 1.0,
+      "color_saturation_boost": 0.8,
+      "min_number_size": 14,
+      "number_contrast": "very_high",
+      "number_size_strategy": "uniform"
+    }
+  }

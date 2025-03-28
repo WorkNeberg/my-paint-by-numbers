@@ -333,7 +333,7 @@ class SettingsManager:
             # Filter out None values and special keys like 'style'
             filtered_params = {k: v for k, v in custom_params.items() 
                               if v is not None and k != 'style'}
-            
+            filtered_params = self.normalize_parameter_types(filtered_params)
             # Handle any relative modifications ("+5", "-3")
             for key, value in filtered_params.items():
                 if isinstance(value, str) and (value.startswith('+') or value.startswith('-')):
@@ -781,25 +781,6 @@ class SettingsManager:
         logger.info(f"Saved preset '{preset_name}' to {preset_path}")
         return preset_path
     
-    def load_preset(self, preset_path):
-        """
-        Load settings from a preset file
-        
-        Args:
-            preset_path: Path to the preset file
-            
-        Returns:
-            Dictionary with preset data and settings
-        """
-        try:
-            with open(preset_path, 'r') as f:
-                preset = json.load(f)
-                logger.info(f"Loaded preset from {preset_path}")
-                return preset
-        except Exception as e:
-            logger.error(f"Error loading preset: {e}")
-            return None
-    
     def get_available_presets(self, tag=None):
         """
         Get list of available presets
@@ -902,3 +883,60 @@ class SettingsManager:
             if "recommended" in image_config:
                 return image_config["recommended"]
         return "standard"
+    
+    def normalize_parameter_types(self, params):
+        """Convert parameter values to their proper types based on validation rules"""
+        normalized = {}
+        for key, value in params.items():
+            if key in self.valid_values:
+                validation = self.valid_values[key]
+                
+                if validation['type'] == 'int':
+                    try:
+                        normalized[key] = int(float(value))
+                    except (ValueError, TypeError):
+                        normalized[key] = value
+                elif validation['type'] == 'float':
+                    try:
+                        normalized[key] = float(value)
+                    except (ValueError, TypeError):
+                        normalized[key] = value
+                else:
+                    normalized[key] = value
+            else:
+                normalized[key] = value
+        return normalized
+
+    def load_preset(self, preset_name):
+        """Load a preset by name"""
+        # First try the exact filename match
+        preset_filename = preset_name.lower().replace(' ', '_') + '.json'
+        direct_path = os.path.join(self.presets_dir, preset_filename)
+        
+        if os.path.exists(direct_path):
+            preset_file = direct_path
+        else:
+            # Fall back to the old search method
+            preset_file = None
+            for filename in os.listdir(self.presets_dir):
+                if filename.lower().startswith(preset_name.lower().replace(' ', '_')):
+                    preset_file = os.path.join(self.presets_dir, filename)
+                    break
+        
+        if not preset_file:
+            return {'success': False, 'error': f'Preset {preset_name} not found'}
+        
+        try:
+            with open(preset_file, 'r') as f:
+                preset_data = json.load(f)
+            
+            if 'settings' in preset_data and preset_data['settings']:
+                return {
+                    'success': True,
+                    'settings': preset_data['settings']
+                }
+            else:
+                return {'success': False, 'error': f'No settings found in preset {preset_name}'}
+        except Exception as e:
+            logger.warning(f"Could not load preset {preset_file}: {str(e)}")
+            return {'success': False, 'error': str(e)}

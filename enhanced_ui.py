@@ -10,6 +10,15 @@ import json
 # Add this at the top with the other imports
 from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for, send_from_directory, current_app
 
+# Add this helper function at the top of your file with other imports
+import numpy as np
+
+# filepath: c:\PROJECTS\Paint by numbers\enhanced_ui.py
+from enhanced.settings_manager import SettingsManager
+
+# Initialize settings manager
+settings_manager = SettingsManager()
+
 # Setup logging
 logger = logging.getLogger('pbn-app.enhanced_ui')
 
@@ -31,9 +40,6 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-# Add this helper function at the top of your file with other imports
-import numpy as np
 
 def ensure_correct_format(image):
     """Ensure image is in correct format for OpenCV operations"""
@@ -178,17 +184,21 @@ def generate_preview():
 @enhanced_bp.route('/api/process', methods=['POST'])
 def process_image():
     try:
+        # Debug the directories
+        print("App root path:", os.path.dirname(os.path.abspath(__file__)))
+        print("Static folder:", current_app.static_folder)
+        print("PREVIEW_FOLDER:", PREVIEW_FOLDER)
+        
+        # Make sure preview directories exist with a standard naming 
+        os.makedirs(PREVIEW_FOLDER, exist_ok=True)
+        
         # Get settings from request
         settings = request.json or {}
         
         # Extract stay_on_page parameter
-        stay_on_page = False
-        if 'stay_on_page' in settings:
-            stay_on_page = settings.pop('stay_on_page', False)
+        stay_on_page = settings.pop('stay_on_page', False)
         
-        # Fix edge parameters if needed
-        if 'edge_width' in settings and int(settings['edge_width']) > 5:
-            settings['edge_width'] = 3
+        logger.info(f"Processing with stay_on_page={stay_on_page}")
         
         # Get image path from session
         if 'uploaded_image' not in session:
@@ -197,39 +207,63 @@ def process_image():
         image_path = session['uploaded_image']['path']
         timestamp = os.path.basename(image_path).split('_')[0]
         
+        # Force cache refresh
+        settings['refresh_cache'] = True
+        
         # Process the image
         result = enhanced_integration.process_image(image_path, settings)
+        
+        if 'error' in result:
+            return jsonify({
+                'error': 'Processing failed',
+                'details': result.get('error', 'Unknown error')
+            }), 500
         
         # Generate previews for all stages if staying on page
         if stay_on_page:
             preview_types = ['preprocessed', 'segments', 'edges', 'template']
             for preview_type in preview_types:
                 try:
-                    # Generate each preview type
+                    print(f"Generating {preview_type} preview with settings: {settings.get('image-type')}")
                     preview_result = enhanced_integration.generate_preview(image_path, settings, preview_type)
+                    
                     if preview_result and 'preview' in preview_result:
-                        # Get the preview image
+                        print(f"Preview result keys for {preview_type}: {list(preview_result.keys())}")
                         preview_img = preview_result['preview']
                         
-                        # Convert to proper format for saving
+                        # Debug the preview image
+                        print(f"Preview image shape: {preview_img.shape}, dtype: {preview_img.dtype}")
+                        
+                        # Convert to BGR for OpenCV saving
                         if preview_img.dtype != np.uint8:
                             preview_img = (preview_img * 255).astype(np.uint8)
                         
-                        # Make sure it's BGR for OpenCV saving
-                        if len(preview_img.shape) == 2:  # Grayscale
+                        # Handle grayscale images properly
+                        if len(preview_img.shape) == 2:
                             preview_img = cv2.cvtColor(preview_img, cv2.COLOR_GRAY2BGR)
-                        elif preview_img.shape[2] == 3:  # RGB
+                        elif len(preview_img.shape) == 3 and preview_img.shape[2] == 3:
                             preview_img = cv2.cvtColor(preview_img, cv2.COLOR_RGB2BGR)
                         
-                        # Create previews directory if it doesn't exist
-                        preview_dir = os.path.join(current_app.static_folder, 'previews')
-                        os.makedirs(preview_dir, exist_ok=True)
+                        # Save preview - make SURE we're using the absolute path
+                        preview_path = os.path.join(PREVIEW_FOLDER, f"preview_{timestamp}_{preview_type}.jpg")
+                        print(f"Saving preview to: {preview_path}")
+                        success = cv2.imwrite(preview_path, preview_img)
                         
-                        # Save preview image
-                        preview_path = os.path.join(preview_dir, f"preview_{timestamp}_{preview_type}.jpg")
-                        cv2.imwrite(preview_path, preview_img)
+                        if success:
+                            print(f"Successfully saved {preview_type} preview to {preview_path}")
+                            # Verify file exists
+                            if os.path.exists(preview_path):
+                                print(f"Verified file exists at {preview_path}")
+                            else:
+                                print(f"WARNING: File does not exist at {preview_path} after save!")
+                        else:
+                            print(f"ERROR: Failed to save {preview_type} preview to {preview_path}")
+                    else:
+                        print(f"No preview image found for {preview_type}. Keys: {preview_result.keys() if preview_result else None}")
                 except Exception as e:
-                    logger.error(f"Error generating {preview_type} preview: {str(e)}")
+                    import traceback
+                    print(f"ERROR generating {preview_type} preview: {str(e)}")
+                    print(traceback.format_exc())
         
         # Store settings in session for later use
         session['processing_settings'] = settings
@@ -247,10 +281,12 @@ def process_image():
                 'redirect': '/enhanced/results'
             })
     except Exception as e:
-        logger.error(f"Error processing image: {e}", exc_info=True)
+        print(f"CRITICAL ERROR in process_image: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
-            'error': 'Processing error',
-            'details': str(e)
+            'error': f"Processing failed: {str(e)}",
+            'details': traceback.format_exc()
         }), 500
 
 @enhanced_bp.route('/api/analyze', methods=['POST'])
@@ -292,17 +328,38 @@ def save_preset():
 
 @enhanced_bp.route('/api/presets/load/<preset_name>', methods=['GET'])
 def load_preset(preset_name):
-    """API endpoint to load a preset"""
+    """Load a preset by name"""
+    # Try direct file access instead of using settings_manager.load_preset
     try:
-        settings = enhanced_integration.load_preset(preset_name)
-        return jsonify({
-            'success': True,
-            'settings': settings
-        })
-    except Exception as e:
-        logger.error(f"Error loading preset: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        preset_filename = preset_name.lower().replace(' ', '_') + '.json'
+        full_path = os.path.join(settings_manager.presets_dir, preset_filename)
         
+        if os.path.exists(full_path):
+            with open(full_path, 'r') as f:
+                preset_data = json.load(f)
+                
+                if 'settings' in preset_data and preset_data['settings']:
+                    return jsonify({
+                        'success': True,
+                        'settings': preset_data['settings']
+                    })
+                else:
+                    return jsonify({
+                        'success': False, 
+                        'error': f'No settings found in preset {preset_name}'
+                    })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Preset file not found at {full_path}'
+            })
+    except Exception as e:
+        print(f"Error loading preset: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
 @enhanced_bp.route('/results')
 def results():
     """Display the results page for the processed image"""
@@ -412,7 +469,7 @@ def process_all_previews():
         })
         
     except Exception as e:
-        logger.error(f"Error generating previews: {e}", exc_info=True)
+        logger.error(f"Error generating previews: {e}")
         return jsonify({
             'error': 'Preview generation error',
             'details': str(e)
